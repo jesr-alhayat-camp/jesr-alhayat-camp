@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>تفعيل حساب الأسرة</title>
+  <link rel="stylesheet" href="/recovery.css">
+  <script defer src="/recovery.js"></script>
+</head>
+<body>
+  <main>
+    <p class="brand">مخيم الأصدقاء الجلاء</p>
+    <h1>تفعيل حساب الأسرة لأول مرة</h1>
+    <p id="status" role="status"></p>
+    <form id="identity">
+      <label for="id">رقم هوية رب الأسرة</label>
+      <input id="id" dir="ltr" inputmode="numeric" autocomplete="username" required maxlength="9">
+      <button>متابعة</button>
+    </form>
+    <form id="questions" hidden>
+      <label for="spouse">رقم هوية الزوجة المسجّلة</label>
+      <input id="spouse" dir="ltr" inputmode="numeric" required maxlength="9">
+      <label for="members">عدد أفراد الأسرة المسجّل</label>
+      <input id="members" dir="ltr" inputmode="numeric" required maxlength="3">
+      <label for="phone">آخر 7 أرقام من الجوال المسجّل (بدون 059 أو 056)</label>
+      <input id="phone" dir="ltr" inputmode="numeric" required maxlength="7">
+      <button>تحقّق من الإجابات</button>
+    </form>
+    <form id="password" hidden>
+      <label for="newPassword">كلمة المرور</label>
+      <input id="newPassword" type="password" dir="ltr" minlength="8" maxlength="64" autocomplete="new-password" required>
+      <p>استخدم حروف وأرقام، و8 أحرف على الأقل.</p>
+      <button>إنشاء كلمة المرور</button>
+    </form>
+    <a href="https://aljalacamp-test.web.app/">العودة لتسجيل الدخول</a>
+  </main>
+</body>
+</html>

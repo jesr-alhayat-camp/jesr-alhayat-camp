@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://*.firebaseio.com; frame-src 'self' https://REPLACE_WITH_TEST_AUTH_DOMAIN; connect-src https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:">
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <title>بوابة العائلة - مخيم الأصدقاء الجلاء</title>
+    <meta name="theme-color" content="#0f766e">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/portal-r3.css">
+    <link rel="stylesheet" href="/assets/camp-access-modern.css">
+</head>
+<body class="modern-portal">
+    <div class="container">
+        
+        <div id="normalLoginSection" class="card-box access-card">
+            <aside class="access-brand" aria-label="مخيم الأصدقاء الجلاء">
+                <span class="access-mark" aria-hidden="true"></span>
+                <p class="access-kicker">مخيم الأصدقاء الجلاء</p>
+                <h1>بوابة العائلة</h1>
+                <p>تابع بيانات أسرتك والمساعدات والطلبات من حسابك.</p>
+            </aside>
+            <div class="access-panel">
+                <h2>تسجيل الدخول</h2>
+                <p class="access-intro">أدخل هوية رب الأسرة وكلمة المرور.</p>
+                <form id="normalLoginForm">
+                    <div class="input-group"><label for="normalId">رقم هوية رب الأسرة</label><input type="text" id="normalId" dir="ltr" required inputmode="numeric" autocomplete="username"></div>
+                    <div class="input-group"><label for="normalPassword">كلمة المرور</label><input type="password" id="normalPassword" dir="ltr" required autocomplete="current-password"></div>
+                    <div class="form-err" id="loginErr" role="alert"></div>
+                    <button type="submit" class="btn-primary" id="loginBtn">تسجيل الدخول</button>
+                </form>
+                <div class="access-actions">
+                    <button type="button" class="nav-link access-secondary" onclick="openAccountRecovery()">فعّل حسابك لأول مرة</button>
+                    <button type="button" class="nav-link access-help" onclick="openHelp()">نسيت كلمة المرور؟</button>
+                    <button type="button" class="nav-link access-help" onclick="openHelp()">مساعدة وتواصل</button>
+                </div>
+                <div class="contact-slot"></div>
+            </div>
+        </div>
+
+        <!-- اللوحة الرئيسية للعائلة -->
+        <div id="dashboardSection" class="hidden">
+            <div class="dashboard-header">
+                <h3 style="margin:0; color:#2563eb;">أهلاً بك، <span id="dashName"></span></h3>
+                <button id="logoutBtn" class="btn-danger">خروج</button>
+            </div>
+
+            <div id="noticeBox"></div>
+            <!-- عرض آخر مساعدة مستلمة -->
+            <div id="lastAidBanner" class="aid-banner">
+                <h4>📦 آخر مساعدة تم استلامها</h4>
+                <p id="aidDetailsText">جاري فحص الكشوفات...</p>
+            </div>
+
+            <!-- معلومات الأسرة -->
+            <div class="card" style="border-top-color: #f59e0b;">
+                <h3 style="color: #d97706; margin-bottom: 10px;">📋 ملخص بيانات الأسرة</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <p><strong>رقم الهوية:</strong> <span id="dashId"></span></p>
+                    <p><strong>القاطع:</strong> <span id="dashSector"></span></p>
+                    <p><strong>عدد الأفراد:</strong> <span id="dashMembers"></span></p>
+                    <p><strong>المسكن:</strong> <span id="dashHousing"></span></p>
+                    <p><strong>المهنة:</strong> <span id="dashJob"></span></p>
+                    <p><strong>الحالة:</strong> <span id="dashStatus"></span></p>
+                    <p><strong>تاريخ الميلاد:</strong> <span id="dashDob"></span></p>
+                    <p id="dashW1Row" class="hidden"><strong>الزوجة الأولى:</strong> <span id="dashW1"></span></p>
+                    <p id="dashW2Row" class="hidden"><strong>الزوجة الثانية:</strong> <span id="dashW2"></span></p>
+                </div>
+                <button class="btn-warning" onclick="openEditForm()" style="margin-top: 15px;">✏️ تحديث الاستبيان وبيانات الأسرة</button>
+            </div>
+
+            <!-- الأطفال المسجلين -->
+            <div class="card" style="border-top-color: #10b981;">
+                <h3 style="color: #059669; margin-bottom: 10px;">👶 الأطفال المسجلون في المخيم</h3>
+                <div style="overflow-x: auto;">
+                    <table id="dashChildrenTable">
+                        <thead><tr><th>اسم الطفل</th><th>الهوية</th><th>تاريخ الميلاد</th><th>العمر</th><th>الجنس</th><th>ملاحظات</th><th>تعديل</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- الأيتام والمصابين -->
+            <div class="card" style="border-top-color: #8b5cf6;">
+                <h3 style="color: #7c3aed; margin-bottom: 10px;">🛡️ الأيتام والمصابون المسجلون</h3>
+                <p><strong>الأيتام:</strong> <span id="dashOrphans">-</span></p>
+                <p><strong>المصابون:</strong> <span id="dashInjured">-</span></p>
+            </div>
+
+            <!-- سجل المساعدات -->
+            <div class="card" style="border-top-color: #3b82f6;">
+                <h3 style="color: #2563eb; margin-bottom: 10px;">📋 سجل كل المساعدات المستلمة</h3>
+                <div style="overflow-x: auto;">
+                    <table id="dashAidsTable">
+                        <thead>
+                            <tr><th>نوع المساعدة</th><th>الكمية</th><th>ملاحظات</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- طلباتي -->
+            <div class="card" style="border-top-color: #0ea5e9;">
+                <h3 style="color: #0369a1; margin-bottom: 10px;">🧾 طلباتي وحالتها</h3>
+                <div style="overflow-x: auto;">
+                    <table id="myReqsTable">
+                        <thead><tr><th>نوع الطلب</th><th>التاريخ</th><th>الحالة</th><th>ملاحظة الإدارة</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p class="sub-muted">تظهر هنا حالة طلباتك بعد أن تستلمها الإدارة وتراجعها.</p>
+            </div>
+
+            <!-- أزرار الإضافة والشكاوى -->
+            <div class="card" style="border-top-color: #10b981;">
+                <h3 style="color: #059669; margin-bottom: 10px;">➕ الطلبات والإضافات</h3>
+                <div class="action-grid">
+                    <button class="btn-success" onclick="switchView('addChild')">👶 إضافة طفل</button>
+                    <button class="btn-primary" onclick="switchView('addChronic')">💊 إضافة مريض</button>
+                    <button class="btn-danger" onclick="switchView('addInjured')">🩹 تسجيل إصابة</button>
+                    <button class="btn-purple" onclick="switchView('addComplaint')">📝 تقديم شكوى أو طلب</button>
+                    <button class="btn-warning" onclick="switchView('changePwd')">🔒 تغيير كلمة المرور</button>
+                    <button class="btn-purple" onclick="printCard()">🖨 طباعة بطاقة العائلة</button>
+                    <button class="btn-primary" style="background:#0f766e" onclick="openHelp()">💬 تواصل مع الإدارة / مساعدة</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- نماذج التحديث والتعديل -->
+        <div id="editDataSection" class="card-box hidden">
+            <h2 style="color: #f59e0b; margin-bottom: 10px;">✏️ تحديث استبيان الأسرة</h2>
+            <div class="lock-note">🔒 يمكنك تعديل جميع البيانات ما عدا <b>القاطع</b> و<b>الاسم</b> و<b>رقم الهوية</b> (حقول مقفلة). لتصحيحها تواصل مع الإدارة. تصل تعديلاتك للإدارة للمراجعة قبل اعتمادها.</div>
+            <form id="editFamilyForm">
+                <div class="form-grid">
+                    <h3 class="section-title">البيانات الأساسية</h3>
+                    <div class="input-group">
+                        <label>القاطع</label>
+                        <input type="text" id="edit_sector" readonly class="locked">
+                    </div>
+                    <div class="input-group"><label>الاسم رباعي 🔒</label><input type="text" id="edit_name" readonly class="locked"></div>
+                    <div class="input-group"><label>رقم الهوية 🔒</label><input type="text" id="edit_id" readonly class="locked"></div>
+                    <div class="input-group"><label>الجنس</label><input type="text" id="edit_gender" list="dl_gender"></div>
+                    <div class="input-group"><label>تاريخ الميلاد</label><input type="text" id="edit_dob"></div>
+                    <div class="input-group"><label>رقم الجوال الأساسي</label><input type="text" id="edit_phone1"></div>
+                    <div class="input-group"><label>رقم الجوال الثاني</label><input type="text" id="edit_phone2"></div>
+                    <div class="input-group"><label>الحالة الاجتماعية</label><input type="text" id="edit_marital" list="dl_marital"></div>
+                    
+                    <h3 class="section-title">بيانات الزوجات</h3>
+                    <div class="input-group"><label>اسم الزوجة الأولى</label><input type="text" id="edit_wife1_name"></div>
+                    <div class="input-group"><label>هوية الزوجة الأولى</label><input type="text" id="edit_wife1_id"></div>
+                    <div class="input-group"><label>تاريخ ميلاد الزوجة الأولى</label><input type="text" id="edit_wife1_dob"></div>
+                    
+                    <div class="input-group"><label>اسم الزوجة الثانية</label><input type="text" id="edit_wife2_name"></div>
+                    <div class="input-group"><label>هوية الزوجة الثانية</label><input type="text" id="edit_wife2_id"></div>
+                    <div class="input-group"><label>تاريخ ميلاد الزوجة الثانية</label><input type="text" id="edit_wife2_dob"></div>
+
+                    <h3 class="section-title">التقسيمات العمرية (أعداد)</h3>
+                    <div class="input-group"><label>(يوم - سنتين) ذكر</label><input type="number" id="edit_a_15" min="0"></div>
+                    <div class="input-group"><label>(يوم - سنتين) أنثى</label><input type="number" id="edit_a_16" min="0"></div>
+                    <div class="input-group"><label>(3 - 6 سنوات) ذكر</label><input type="number" id="edit_a_17" min="0"></div>
+                    <div class="input-group"><label>(3 - 6 سنوات) أنثى</label><input type="number" id="edit_a_18" min="0"></div>
+                    <div class="input-group"><label>(7 - 12 سنة) ذكر</label><input type="number" id="edit_a_19" min="0"></div>
+                    <div class="input-group"><label>(7 - 12 سنة) أنثى</label><input type="number" id="edit_a_20" min="0"></div>
+                    <div class="input-group"><label>(13 - 17 سنة) ذكر</label><input type="number" id="edit_a_21" min="0"></div>
+                    <div class="input-group"><label>(13 - 17 سنة) أنثى</label><input type="number" id="edit_a_22" min="0"></div>
+                    <div class="input-group"><label>(18 - 60 سنة) ذكر</label><input type="number" id="edit_a_23" min="0"></div>
+                    <div class="input-group"><label>(18 - 60 سنة) أنثى</label><input type="number" id="edit_a_24" min="0"></div>
+                    <div class="input-group"><label>(فوق 60 سنة) ذكر</label><input type="number" id="edit_a_25" min="0"></div>
+                    <div class="input-group"><label>(فوق 60 سنة) أنثى</label><input type="number" id="edit_a_26" min="0"></div>
+                    <div class="input-group"><label>العدد الكلي للأفراد</label><input type="number" id="edit_members" min="1" required></div>
+                    
+                    <h3 class="section-title">بيانات السكن والحالة</h3>
+                    <div class="input-group"><label>المحافظة الأصلية</label><input type="text" id="edit_orig_gov"></div>
+                    <div class="input-group"><label>عنوان السكن الأصلي</label><input type="text" id="edit_orig_addr"></div>
+                    <div class="input-group"><label>المحافظة الحالية</label><input type="text" id="edit_curr_gov"></div>
+                    <div class="input-group"><label>عنوان السكن الحالي</label><input type="text" id="edit_curr_addr"></div>
+                    <div class="input-group">
+                        <label>نوع المسكن</label>
+                        <select id="edit_housing">
+                            <option value="">-- اختر المسكن --</option>
+                            <option value="خيمة">خيمة</option>
+                            <option value="غرفة">غرفة</option>
+                            <option value="مركز إيواء">مركز إيواء</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>الحالة</label>
+                        <select id="edit_status">
+                            <option value="">-- اختر الحالة --</option>
+                            <option value="نازح">نازح</option>
+                            <option value="مقيم">مقيم</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>المهنة</label>
+                        <select id="edit_job">
+                            <option value="">-- اختر المهنة --</option>
+                            <option value="موظف حكومي">موظف حكومي</option>
+                            <option value="عاطل عن العمل">عاطل عن العمل</option>
+                            <option value="عامل دخل محدود">عامل دخل محدود</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>نوع الضرر</label>
+                        <select id="edit_damage">
+                            <option value="">-- اختر الضرر --</option>
+                            <option value="هدم كلي">هدم كلي</option>
+                            <option value="جزئي">جزئي</option>
+                        </select>
+                    </div>
+                    
+                    <h3 class="section-title">الرعاية الصحية</h3>
+                    <div class="input-group"><label>هل تعيل الأسرة امرأة؟</label><input type="text" id="edit_woman_sup" placeholder="نعم / لا" list="dl_yn"></div>
+                    <div class="input-group"><label>يوجد امرأة حامل أو مرضعة؟</label><input type="text" id="edit_preg_nurse" placeholder="نعم / لا" list="dl_yn"></div>
+                    <div class="input-group"><label>ذوو الإعاقة (إن وجدوا)</label><input type="text" id="edit_disab" placeholder="اكتب التفاصيل أو اتركه فارغاً"></div>
+                    <div class="input-group"><label>أمراض مزمنة في الأسرة</label><input type="text" id="edit_chronic_txt" placeholder="اكتب التفاصيل أو اتركه فارغاً"></div>
+                </div>
+                <button type="submit" class="btn-warning" style="margin-top:20px;">إرسال طلب التحديث للإدارة</button>
+                <button type="button" class="btn-danger" style="margin-top:10px; width:100%;" onclick="switchView('dashboard')">إلغاء والعودة</button>
+            </form>
+        </div>
+
+        <div id="editChildSection" class="card-box hidden">
+            <h2 style="color: #f59e0b; margin-bottom: 15px;">✏ طلب تعديل بيانات طفل</h2>
+            <form id="editChildForm">
+                <div class="form-grid">
+                    <div class="input-group"><label>اسم الطفل رباعي</label><input type="text" id="ec_name" required></div>
+                    <div class="input-group"><label>رقم هوية الطفل (يمكنك تصحيحه)</label><input type="text" id="ec_id" inputmode="numeric" placeholder="اتركه كما هو إن لم يتغير"></div>
+                    <div class="input-group"><label>تاريخ الميلاد</label><input type="text" id="ec_dob" required></div>
+                    <div class="input-group"><label>الجنس</label><select id="ec_gender"><option>ذكر</option><option>أنثى</option></select></div>
+                    <div class="input-group" style="grid-column: 1 / -1;"><label>ملاحظات (مستلزمات الحليب والحفاظات)</label><input type="text" id="ec_notes"></div>
+                </div>
+                <button type="submit" class="btn-warning">إرسال طلب التعديل للإدارة</button>
+                <button type="button" class="btn-danger" style="margin-top:10px; width:100%;" onclick="switchView('dashboard')">إلغاء</button>
+            </form>
+        </div>
+
+        <div id="changePwdSection" class="card-box hidden">
+            <h2 style="color:#f59e0b;margin-bottom:15px;">🔒 تغيير كلمة المرور</h2>
+            <form id="changePwdForm">
+                <div class="input-group"><label>كلمة المرور الحالية</label><input type="password" id="curPwd" required autocomplete="current-password"></div>
+                <div class="input-group"><label>كلمة المرور الجديدة (8 أحرف على الأقل، حروف وأرقام)</label><input type="password" id="newPwd2" required autocomplete="new-password"></div>
+                <button type="submit" class="btn-warning">حفظ كلمة المرور الجديدة</button>
+                <button type="button" class="btn-danger" style="margin-top:10px;width:100%;" onclick="switchView('dashboard')">رجوع</button>
+            </form>
+        </div>
+
+        <div id="addChildSection" class="card-box hidden">
+            <h2 style="color: #10b981; margin-bottom: 15px;">👶 إضافة طفل جديد للكشف</h2>
+            <form id="addChildForm">
+                <div class="form-grid">
+                    <div class="input-group"><label>اسم الطفل رباعي</label><input type="text" id="c_name" required></div>
+                    <div class="input-group"><label>رقم هوية الطفل</label><input type="text" id="c_id"></div>
+                    <div class="input-group"><label>تاريخ الميلاد</label><input type="text" id="c_dob" required placeholder="يوم/شهر/سنة مثال 12/05/2018"></div>
+                    <div class="input-group"><label>الجنس</label><select id="c_gender"><option>ذكر</option><option>أنثى</option></select></div>
+                    <div class="input-group"><label>الأم (من المسجلات في ملف الأسرة)</label><select id="c_mom_sel" onchange="momToggle()"></select></div>
+                    <div id="c_mom_manual" class="hidden" style="grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                        <div class="input-group"><label>اسم الأم</label><input type="text" id="c_mom_name"></div>
+                        <div class="input-group"><label>رقم هوية الأم</label><input type="text" id="c_mom_id"></div>
+                    </div>
+                    
+                    <h3 class="section-title">مستلزمات الأطفال أقل من سنتين</h3>
+                    <div class="input-group">
+                        <label>مقاس الحفاظات (إن وجد)</label>
+                        <select id="c_diapers">
+                            <option value="">-- لا يوجد / لا يحتاج --</option>
+                            <option value="مقاس 1">مقاس 1</option>
+                            <option value="مقاس 2">مقاس 2</option>
+                            <option value="مقاس 3">مقاس 3</option>
+                            <option value="مقاس 4">مقاس 4</option>
+                            <option value="مقاس 5">مقاس 5</option>
+                            <option value="مقاس 6">مقاس 6</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>نوع / اسم الحليب الطبي (إن وجد)</label>
+                        <input type="text" id="c_milk" placeholder="مثال: بيبيلاك 1، سيميلاك...">
+                    </div>
+                </div>
+                <button type="submit" class="btn-success">إضافة الطفل</button>
+                <button type="button" class="btn-danger" style="margin-top:10px; width:100%;" onclick="switchView('dashboard')">رجوع</button>
+            </form>
+        </div>
+
+        <div id="addChronicSection" class="card-box hidden">
+            <h2 style="color: #2563eb; margin-bottom: 15px;">💊 إضافة مريض مزمن للكشف</h2>
+            <form id="addChronicForm">
+                <div class="form-grid">
+                    <div class="input-group"><label>اسم المريض رباعي</label><input type="text" id="ch_name" required></div>
+                    <div class="input-group"><label>رقم الهوية</label><input type="text" id="ch_id" required></div>
+                    <div class="input-group"><label>تاريخ الميلاد</label><input type="text" id="ch_dob"></div>
+                    <div class="input-group"><label>الجنس</label><select id="ch_gender"><option>ذكر</option><option>أنثى</option></select></div>
+                    <div class="input-group"><label>نوع المرض المزمن</label><input type="text" id="ch_type" required></div>
+                    <div class="input-group"><label>الأدوية المطلوبة / ملاحظات</label><input type="text" id="ch_notes"></div>
+                </div>
+                <button type="submit" class="btn-primary">إضافة المريض</button>
+                <button type="button" class="btn-danger" style="margin-top:10px; width:100%;" onclick="switchView('dashboard')">رجوع</button>
+            </form>
+        </div>
+
+        <div id="addInjuredSection" class="card-box hidden">
+            <h2 style="color: #ef4444; margin-bottom: 15px;">🩹 تسجيل حالة إصابة</h2>
+            <form id="addInjuredForm">
+                <div class="form-grid">
+                    <div class="input-group"><label>اسم المصاب رباعي</label><input type="text" id="i_name" required></div>
+                    <div class="input-group"><label>رقم الهوية</label><input type="text" id="i_id" required></div>
+                    <div class="input-group"><label>تاريخ الميلاد</label><input type="text" id="i_dob"></div>
+                    <div class="input-group"><label>نوع ومكان الإصابة</label><input type="text" id="i_type" required></div>
+                    <div class="input-group" style="grid-column: 1 / -1;"><label>ملاحظات وحالة الإصابة الحالية</label><input type="text" id="i_notes"></div>
+                </div>
+                <button type="submit" class="btn-danger" style="width:100%; font-size:15px; padding:12px;">تسجيل الإصابة</button>
+                <button type="button" class="btn-warning" style="margin-top:10px; width:100%;" onclick="switchView('dashboard')">رجوع</button>
+            </form>
+        </div>
+
+        <div id="addComplaintSection" class="card-box hidden">
+            <h2 style="color: #8b5cf6; margin-bottom: 15px;">📝 تقديم شكوى أو طلب للإدارة</h2>
+            <form id="addComplaintForm">
+                <div class="input-group"><label>نوع الطلب</label><select id="comp_cat"><option>طلب مساعدة</option><option>شكوى توزيع</option><option>تصحيح بيانات</option><option>استفسار</option><option>أخرى</option></select></div>
+                <div class="input-group"><label>موضوع الشكوى / الطلب</label><input type="text" id="comp_subject" required placeholder="مثال: طلب خيمة، مشكلة في التوزيع..."></div>
+                <div class="input-group"><label>التفاصيل بالكامل</label><textarea id="comp_details" required style="width: 100%; height: 100px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px;" placeholder="اكتب تفاصيل طلبك هنا..."></textarea></div>
+                <button type="submit" class="btn-purple">إرسال الطلب</button>
+                <button type="button" class="btn-danger" style="margin-top:10px; width:100%;" onclick="switchView('dashboard')">رجوع</button>
+            </form>
+        </div>
+
+    <div id="helpSection" class="card-box hidden" style="text-align:right">
+            <h2 style="color:#0f766e;margin-bottom:10px;">💬 المساعدة والتواصل</h2>
+            <div class="contact-slot"></div>
+            <h3 class="section-title">الأسئلة الشائعة</h3>
+            <details class="faq"><summary>كيف أفعّل حسابي لأول مرة؟</summary><p>اضغط «عائلة جديدة؟» وأدخل رقم هوية رب الأسرة، ثم أجب عن سؤالين من بياناتك المسجلة لدى الإدارة، وبعدها اختر كلمة مرور (8 أحرف على الأقل، حروف وأرقام).</p></details>
+            <details class="faq"><summary>نسيت كلمة المرور، ماذا أفعل؟</summary><p>تواصل مع الإدارة عبر واتساب أو الاتصال في أوقات التواصل (من 12 ظهراً حتى 6 مساءً) وسيتم مساعدتك.</p></details>
+            <details class="faq"><summary>كيف أعدّل بيانات أسرتي؟</summary><p>من زر «تحديث الاستبيان وبيانات الأسرة». يمكنك تعديل كل البيانات عدا القاطع والاسم ورقم الهوية، وتصل تعديلاتك للإدارة للمراجعة قبل اعتمادها.</p></details>
+            <details class="faq"><summary>كيف أعرف حالة طلبي؟</summary><p>من قسم «طلباتي وحالتها» في الصفحة الرئيسية: قيد المراجعة، تمت الموافقة، أو مرفوض مع ذكر السبب.</p></details>
+            <details class="faq"><summary>اسمي أو رقم هويتي مسجل بشكل خاطئ</summary><p>هذه الحقول مقفلة ولا تعدّل من البوابة، تواصل مع الإدارة مباشرة لتصحيحها.</p></details>
+            <details class="faq"><summary>خصوصية بياناتي</summary><p>تُستخدم بياناتك لتنظيم توزيع المساعدات وخدمة الأسر في المخيم فقط. لا تشارك كلمة المرور مع أي شخص، ولا تعطِها حتى لمن يدّعي أنه من الإدارة.</p></details>
+            <button type="button" class="btn-danger" style="margin-top:12px;width:100%;" onclick="closeHelp()">رجوع</button>
+        </div>
+        <div class="site-foot">⛺ مخيم الأصدقاء الجلاء · بوابة الخدمات الإلكترونية · 2026</div>
+    </div>
+
+    
+    <div id="toast" role="status"></div>
+    <datalist id="dl_gender"><option value="ذكر"><option value="أنثى"></datalist>
+    <datalist id="dl_marital"><option value="متزوج"><option value="أعزب"><option value="أرمل"><option value="مطلق"></datalist>
+    <datalist id="dl_yn"><option value="نعم"><option value="لا"></datalist>
+
+    <script defer src="/assets/startup-r3.js"></script>
+    <script defer src="/assets/camp-recovery-config.js?v=first-activation-20261122"></script>
+    <script defer src="/assets/portal-r3.js?v=first-activation-20261122"></script>
+</body>
+</html>

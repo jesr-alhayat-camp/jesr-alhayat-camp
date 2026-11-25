@@ -1,0 +1,189 @@
+.modern-portal:has(.access-card:not(.hidden)) {
+  min-height: 100vh;
+  min-height: 100svh;
+  align-items: center;
+  padding: clamp(14px, 4vw, 40px);
+  background: #edf4f4 !important;
+}
+.modern-portal:has(.access-card:not(.hidden)) > .container {
+  width: 100%;
+  max-width: 940px !important;
+}
+.modern-portal .access-card:not(.hidden) {
+  display: grid;
+  grid-template-columns: minmax(0, .94fr) minmax(0, 1.06fr);
+  min-height: 520px;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 auto !important;
+  border: 1px solid #d7e4e5;
+  border-radius: 26px !important;
+  background: white;
+  box-shadow: 0 24px 62px #162f381c !important;
+  text-align: start;
+  overflow: hidden;
+}
+.access-card .access-brand {
+  isolation: isolate;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 10px;
+  overflow: hidden;
+  padding: clamp(24px, 5vw, 56px);
+  color: #f5fffd;
+  background: linear-gradient(150deg, #10323d 22%, #135c51);
+}
+.access-card .access-brand::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset-inline-end: -100px;
+  bottom: -180px;
+  width: 350px;
+  height: 350px;
+  border-radius: 50%;
+  border: 1px solid #c8f4e64f;
+  box-shadow: 0 0 0 32px #c8f4e612, 0 0 0 72px #c8f4e60d, 0 0 0 108px #c8f4e609;
+  pointer-events: none;
+}
+.access-card .access-mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 12px;
+  border: 1px solid #aad9cc66;
+  border-radius: 14px;
+  background: #ffffff12;
+}
+.access-card .access-mark::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  border: 2px solid #d6f3df;
+  border-radius: 5px;
+  transform: rotate(45deg);
+}
+.access-card .access-brand :is(h1,.access-brand-title) {
+  color: white;
+  font-size: clamp(1.85rem, 4vw, 3.1rem);
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+.access-card .access-brand p {
+  color: #d1e9e4;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.access-card .access-brand .access-kicker { color: #bcebd6; font-weight: 600; }
+.access-card .access-panel {
+  min-width: 0;
+  padding: clamp(22px, 5vw, 52px);
+  align-self: center;
+  color: #102c35;
+}
+.access-card .access-panel h2 {
+  margin: 0 0 8px;
+  color: #102c35 !important;
+  font-size: clamp(1.45rem, 3vw, 2rem);
+}
+.access-card .access-intro {
+  margin: 0 0 24px;
+  color: #49616a;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.access-card .input-group label {
+  color: #233f48;
+  font-size: .94rem;
+}
+.access-card .input-group input {
+  min-height: 48px;
+  padding-inline: 12px;
+  border: 1px solid #b8cacf !important;
+  border-radius: 10px !important;
+  background: #fbfdfd !important;
+  font-size: 16px;
+}
+.access-card .access-panel button {
+  min-height: 44px;
+  border-radius: 10px !important;
+  font-size: .96rem;
+}
+.access-card .access-panel :is(.btn-primary,.btn-success) {
+  background: #086458 !important;
+  color: white !important;
+}
+.access-card .access-actions { margin-top: 16px; }
+.access-card .access-panel .access-secondary {
+  margin-top: 0;
+  background: #e6f3ef !important;
+  color: #135449 !important;
+  border: 1px solid #c9e1d9 !important;
+  box-shadow: none !important;
+}
+.access-card .access-panel .access-help {
+  margin-top: 4px;
+  background: transparent !important;
+  color: #205b54 !important;
+  box-shadow: none !important;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.access-card :is(button,input):focus-visible {
+  outline: 3px solid #b57b09;
+  outline-offset: 2px;
+}
+@media (max-width: 680px) {
+  .modern-portal .access-card:not(.hidden) {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    border-radius: 18px !important;
+  }
+  .access-card .access-brand { padding: 18px 22px; gap: 4px; }
+  .access-card .access-mark { display: none; }
+  .access-card .access-panel { padding: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .access-card *, .access-card *::before, .access-card *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+/* Match the dashboard's light glass surfaces */
+.modern-portal:has(.access-card:not(.hidden)) {
+  background: radial-gradient(ellipse at 88% 0%,#cad8fd,transparent 52%),
+              radial-gradient(ellipse at 10% 92%,#e7d9f8,transparent 48%),
+              #eff3fc !important;
+}
+.modern-portal .access-card:not(.hidden) {
+  background: #ffffffc9 !important;
+  border-color: #fff;
+}
+.access-card .access-brand {
+  background: linear-gradient(150deg,#1a2953,#3655a0 82%);
+}
+.access-card .access-brand::after {
+  box-shadow: 0 0 0 32px #e5ddff18,0 0 0 72px #e5ddff13,0 0 0 108px #e5ddff0d;
+}
+.access-card .access-panel h2 { color: #18294d !important; }
+.access-card .access-intro { color: #405276; }
+.access-card .input-group label { color: #34476d !important; }
+.access-card .input-group input {
+  background: #f7f9ff !important;
+  border-color: #aabbdc !important;
+}
+.access-card .access-panel :is(.btn-primary,.btn-success) { background: #3154ad !important; }
+.access-card .access-panel .access-secondary {
+  background: #e8eeff !important;
+  color: #27458e !important;
+  border-color: #c9d6fa !important;
+}
+.access-card .access-panel .access-help { color: #2e4c98 !important; }
+.modern-portal:has(.access-card:not(.hidden)) .camp-footer { color: #52668c; }
+

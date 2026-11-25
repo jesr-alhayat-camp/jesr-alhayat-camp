@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة المخيم - قواعد البيانات الموحدة</title>
+    <meta name="theme-color" content="#12292d">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- مكتبات Firebase السحابية -->
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <!-- مكتبة إكسل SheetJS -->
+
+    
+    <link rel="stylesheet" href="/assets/admin-r3.css">
+    <link rel="stylesheet" href="/assets/camp-admin-modern.css">
+</head>
+<body class="modern-admin">
+    <div id="syncLoader" aria-hidden="true" style="display:none"><i></i></div>
+    <div id="loginOverlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999;">
+        <form id="adminLoginForm">
+            <h2>⛺ دخول الإدارة</h2>
+            <p class="login-sub">نظام مخيم الأصدقاء الجلاء الموحد</p>
+            <div class="input-group"><label for="admEmail">البريد الإلكتروني</label><input type="email" id="admEmail" required autocomplete="username" style="direction:ltr"></div>
+            <div class="input-group"><label for="admPass">كلمة المرور</label><div class="pw-wrap"><input type="password" id="admPass" required autocomplete="current-password"><button type="button" id="admPassToggle">إظهار</button></div></div>
+            <div id="loginError" role="alert"></div>
+            <button class="btn btn-blue" id="admLoginBtn">دخول</button>
+        </form>
+    </div>
+    
+    <div class="admin-layout">
+        <div id="menuOverlay" onclick="toggleMenu(false)"></div>
+        <aside class="sidebar">
+            <h2>مخيم الأصدقاء الجلاء</h2>
+            <div id="whoami"></div>
+            <ul id="sidebarMenu">
+                <li id="nav-dashboard" onclick="switchTab('dashboard')" style="background-color:#7c3aed;font-weight:bold;">📊 لوحة المؤشرات</li>
+                <li id="nav-quick" onclick="switchTab('quick')" style="background-color:#0d9488;font-weight:bold;">⚡ توزيع سريع</li>
+                <li id="nav-search" onclick="switchTab('search')" style="background-color: #0284c7; font-weight: bold;">🔍 البحث الشامل</li>
+                <li id="nav-requests" onclick="switchTab('requests')" style="background-color: #475569;">🔔 طلبات وشكاوى <span id="reqBadge" class="badge" style="display:none;">0</span></li>
+                <li id="nav-ann" onclick="switchTab('ann')" style="background-color:#b45309;">📢 إعلانات للعائلات</li>
+                <li id="nav-quality" onclick="switchTab('quality')" style="background-color:#334155;">🧪 فحص جودة البيانات</li>
+                <li id="nav-passwords" onclick="switchTab('passwords')" style="background-color: #0f172a; color: #38bdf8;">🔑 كشف كلمات المرور</li>
+                <li id="nav-families" class="active" onclick="switchTab('families')">👥 قاعدة الأسر</li>
+                <li id="nav-aids" onclick="switchTab('aids')">📦 كشف الاستلام</li>
+                <li id="nav-injured" onclick="switchTab('injured')">🩹 كشف المصابين</li>
+                <li id="nav-orphans" onclick="switchTab('orphans')">👦 كشف الأيتام</li>
+                <li id="nav-children" onclick="switchTab('children')">👶 كشف الأطفال</li>
+                <li id="nav-chronic" onclick="switchTab('chronic')">💊 الأمراض المزمنة</li>
+                <li id="nav-fund" onclick="switchTab('fund')">💰 صندوق المخيم</li>
+                <li id="nav-subscribers" onclick="switchTab('subscribers')" style="background-color: #059669; margin-top: 10px;">💸 دافعو الاشتراك</li>
+                <li id="nav-audit" onclick="switchTab('audit')" style="background-color:#334155;margin-top:10px;">🕵️ سجل العمليات</li>
+            </ul>
+        </aside>
+
+        <main class="content">
+            <button id="menuBtn" onclick="toggleMenu()" aria-label="القائمة">☰</button>
+
+            <!-- لوحة المؤشرات -->
+            <div id="dashboard-tab" class="tab-content">
+                <div class="header"><h1>لوحة المؤشرات</h1><p id="dashStamp" style="color:#64748b;font-size:12px;margin-top:4px;"></p></div>
+                <div id="dashContent" aria-live="polite"></div>
+            </div>
+
+            <!-- التوزيع السريع -->
+            <div id="quick-tab" class="tab-content">
+                <div class="header"><h1>⚡ توزيع سريع</h1></div>
+                <div class="card" style="border-top-color:#0d9488;">
+                    <h2 class="card-title">ابحث برقم الهوية (أو الاسم) ثم اضغط Enter</h2>
+                    <div style="display:flex;gap:10px;">
+                        <input type="text" id="qSearch" placeholder="رقم هوية رب الأسرة أو اسمه..." onkeydown="if(event.key==='Enter')quickFind()" style="flex:1;padding:12px;border:2px solid #0d9488;border-radius:6px;font-size:15px;" autocomplete="off">
+                        <button class="btn btn-green" style="margin:0;padding:0 25px;" onclick="quickFind()">بحث</button>
+                    </div>
+                    <div id="qResult" style="margin-top:15px;"></div>
+                    <datalist id="qTypes"></datalist>
+                </div>
+                <div class="card">
+                    <h2 class="card-title">📝 سجل التسجيلات في هذه الجلسة</h2>
+                    <div id="qLog" style="font-size:13px;color:#334155;">لا توجد تسجيلات بعد.</div>
+                </div>
+                <!-- إضافة بطاقة التوزيع الذكي -->
+                <div class="card" style="border-top-color:#0284c7;">
+                    <h2 class="card-title">🎯 نظام التوزيع الذكي (حسب حجم الأسرة ومنع التكرار)</h2>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label>نوع المساعدة للبحث (مثال: سلة غذائية)</label>
+                            <input type="text" id="smartAidType" placeholder="النوع المُراد توزيعه الآن">
+                        </div>
+                        <div class="input-group">
+                            <label>العدد المطلوب (كم أسرة؟)</label>
+                            <input type="number" id="smartTargetCount" value="50" min="1">
+                        </div>
+                    </div>
+                    <button class="btn btn-blue" onclick="generateSmartList()">📋 توليد الكشف الذكي</button>
+                    <div id="smartDistResult" style="margin-top: 15px;"></div>
+                </div>
+            </div>
+
+            <!-- الإعلانات -->
+            <div id="ann-tab" class="tab-content">
+                <div class="header"><h1>📢 إعلانات للعائلات</h1></div>
+                <div class="card" style="border-top-color:#b45309;">
+                    <h2 class="card-title">نشر إعلان يظهر في بوابة العائلات</h2>
+                    <form onsubmit="addAnn(event)">
+                        <div class="form-grid">
+                            <div class="input-group"><label>العنوان</label><input type="text" id="ann_ti" required maxlength="80"></div>
+                            <div class="input-group"><label>القاطع المستهدف</label><select id="ann_sec"></select></div>
+                            <div class="input-group"><label>ينتهي في (اختياري)</label><input type="date" id="ann_exp"></div>
+                            <div class="input-group" style="grid-column:1 / -1;"><label>نص الإعلان (حتى 400 حرف)</label><textarea id="ann_tx" required maxlength="400" style="width:100%;height:90px;padding:8px;border:1px solid #cbd5e1;border-radius:4px;"></textarea></div>
+                        </div>
+                        <button class="btn btn-blue">📢 نشر الإعلان</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2 class="card-title">الإعلانات الحالية</h2>
+                    <div class="table-responsive"><table id="annTable"><thead><tr><th>#</th><th>العنوان</th><th>النص</th><th>القاطع</th><th>ينتهي</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- فحص الجودة -->
+            <div id="quality-tab" class="tab-content">
+                <div class="header"><h1>🧪 فحص جودة البيانات</h1><p style="color:#64748b;font-size:12px;margin-top:4px;">يكشف التكرارات والبيانات الناقصة أو غير المنطقية لتصحيحها قبل التوزيع.</p></div>
+                <div id="qualContent"></div>
+            </div>
+
+            <!-- سجل العمليات -->
+            <div id="audit-tab" class="tab-content">
+                <div class="header"><h1>🕵️ سجل العمليات</h1></div>
+                <div class="card">
+                    <div class="btn-group-tools">
+                        <input type="text" id="auditSearch" oninput="loadAudit()" placeholder="بحث في السجل..." style="flex:1;min-width:200px;">
+                        <button class="btn btn-blue" style="margin:0;" onclick="exportAudit()">📥 تصدير إكسل</button>
+                    </div>
+                    <div class="table-responsive"><table id="auditTable"><thead><tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr></thead><tbody></tbody></table></div>
+                    <p style="font-size:12px;color:#64748b;margin-top:8px;">يعرض آخر 300 عملية.</p>
+                </div>
+            </div>
+
+            <!-- 0.2 البحث الشامل -->
+            <div id="search-tab" class="tab-content">
+                <div class="header"><h1>🔍 البحث الشامل عن بيانات الأسرة</h1></div>
+                <div class="card">
+                    <h2 class="card-title">ابحث برقم هوية رب الأسرة أو اسمه</h2>
+                    <div style="display:flex; gap:10px; margin-bottom:20px;">
+                        <input type="text" id="globalSearchInput" placeholder="اكتب رقم الهوية أو الاسم الرباعي..." style="flex:1; padding:12px; border:2px solid #2563eb; border-radius:6px; font-size:15px;">
+                        <button class="btn btn-blue" style="margin:0; padding:0 25px;" onclick="globalSearchAll()">بحث شامل</button>
+                    </div>
+                </div>
+
+                <div id="globalSearchResult" class="hidden">
+                    <div class="card" style="border-top-color:#10b981;">
+                        <h2 class="card-title" style="color:#10b981;">👤 بيانات وملخص الأسرة</h2>
+                        <div id="srSummary" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:14px;"></div>
+                        <div id="srActions" class="btn-group-tools" style="margin-top:12px;"></div>
+                    </div>
+                    <div class="card" style="border-top-color:#3b82f6;">
+                        <h2 class="card-title" style="color:#3b82f6;">👶 الأطفال المسجلون</h2>
+                        <div class="table-responsive"><table id="srChildrenTbl"><thead><tr><th>اسم الطفل</th><th>تاريخ الميلاد</th><th>الجنس</th><th>ملاحظات</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card" style="border-top-color:#f59e0b;">
+                        <h2 class="card-title" style="color:#f59e0b;">📦 سجل المساعدات المستلمة</h2>
+                        <div class="table-responsive"><table id="srAidsTbl"><thead><tr><th>نوع المساعدة</th><th>الكمية</th><th>ملاحظات</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card" style="border-top-color:#8b5cf6;">
+                        <h2 class="card-title" style="color:#8b5cf6;">🛡️ الأيتام، الإصابات والأمراض المزمنة</h2>
+                        <div style="display:grid; grid-template-columns:1fr; gap:15px;">
+                            <div><strong>الأيتام:</strong> <span id="srOrphans">-</span></div>
+                            <div><strong>المصابون:</strong> <span id="srInjured">-</span></div>
+                            <div><strong>الأمراض المزمنة:</strong> <span id="srChronic">-</span></div>
+                        </div>
+                    </div>
+                    <div class="card" style="border-top-color:#ef4444;">
+                        <h2 class="card-title" style="color:#ef4444;">💰 الحركات المالية والشكاوى</h2>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                            <div><strong>حركات الصندوق:</strong><div class="table-responsive" style="margin-top:5px;"><table id="srFundTbl"><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th></tr></thead><tbody></tbody></table></div></div>
+                            <div><strong>الشكاوى والطلبات:</strong><div class="table-responsive" style="margin-top:5px;"><table id="srCompTbl"><thead><tr><th>التاريخ</th><th>الموضوع</th><th>التفاصيل</th></tr></thead><tbody></tbody></table></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 0. طلبات التعديل والشكاوى والإضافات -->
+            <div id="requests-tab" class="tab-content">
+                <div class="header"><h1>🔔 طلبات التعديل، الإضافات والشكاوى</h1></div>
+                <div class="card">
+                    <h2 class="card-title">📝 طلبات تعديل بيانات العائلات</h2>
+                    <div class="table-responsive"><table id="requestsTable"><thead><tr><th>#</th><th>اسم العائلة</th><th>الهوية</th><th>التاريخ</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+                <div class="card" style="border-top-color:#10b981;">
+                    <h2 class="card-title" style="color:#10b981;">👶 طلبات إضافة طفل جديد أو تعديل بيانات الطفل</h2>
+                    <div class="table-responsive"><table id="childrenReqTable"><thead><tr><th>#</th><th>نوع الطلب</th><th>هوية الأسرة</th><th>اسم الطفل</th><th>تاريخ الميلاد</th><th>الجنس</th><th>ملاحظات/الحفاظات والحليب</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+                <div class="card" style="border-top-color:#2563eb;">
+                    <h2 class="card-title" style="color:#2563eb;">💊 طلبات إضافة الأمراض المزمنة المعلقة</h2>
+                    <div class="table-responsive"><table id="chronicReqTable"><thead><tr><th>#</th><th>هوية الأسرة</th><th>اسم المريض</th><th>الهوية</th><th>المرض</th><th>الدواء</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+                <div class="card" style="border-top-color:#ef4444;">
+                    <h2 class="card-title" style="color:#ef4444;">🩹 طلبات تسجيل الإصابات المعلقة</h2>
+                    <div class="table-responsive"><table id="injuredReqTable"><thead><tr><th>#</th><th>هوية الأسرة</th><th>اسم المصاب</th><th>الهوية</th><th>نوع الإصابة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+                <div class="card" style="border-top-color:#8b5cf6;">
+                    <h2 class="card-title" style="color:#8b5cf6;">📩 صندوق الشكاوى والطلبات</h2>
+                    <div class="table-responsive"><table id="complaintsTable"><thead><tr><th>#</th><th>التاريخ</th><th>الاسم</th><th>الجوال</th><th>الموضوع</th><th>التفاصيل</th><th>حذف</th></tr></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- 0.1 كشف كلمات المرور -->
+            <div id="passwords-tab" class="tab-content">
+                <div class="header"><h1>🔑 حسابات العائلات وكلمات المرور</h1></div>
+                <div class="card" id="vaultPanel" style="border-top-color:#f59e0b;"></div>
+                <div class="card">
+                    <h2 class="card-title">قائمة كلمات المرور المسجلة للبوابة</h2>
+                    <input type="text" id="pwSearch" oninput="loadPasswordsTable()" placeholder="بحث بالاسم أو رقم الهوية..." style="width:100%;margin-bottom:10px;padding:10px;border:2px solid #38bdf8;">
+                    <div class="table-responsive"><table id="passwordsTable"><thead><tr><th>#</th><th>رقم الهوية</th><th>اسم رب الأسرة</th><th>كلمة المرور</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+            
+            <!-- 1. قاعدة الأسر -->
+            <div id="families-tab" class="tab-content active-tab">
+                <div class="header"><h1>👥 قاعدة الأسر الاستبيان الشامل</h1></div>
+                <div class="card">
+                    <h2 class="card-title">➕ إضافة عائلة للقاعدة</h2>
+                    <form onsubmit="addFamily(event)">
+                        <div class="form-grid">
+                            <h3 class="section-title">البيانات الأساسية</h3>
+                            <div class="input-group"><label>القاطع</label><select id="f_1" required><option value="">-- اختر --</option><option value="ابوفادي">ابوفادي</option><option value="ابو لؤي">ابو لؤي</option><option value="ابو ماجد">ابو ماجد</option><option value="ابو محمود">ابو محمود</option><option value="ابو رفيق">ابو رفيق</option><option value="حسام">حسام</option><option value="ابو عبدالله">ابو عبدالله</option></select></div>
+                            <div class="input-group"><label>الاسم رباعي</label><input type="text" id="f_2" required></div>
+                            <div class="input-group"><label>رقم الهوية</label><input type="text" id="f_3" required></div>
+                            <div class="input-group"><label>الجنس</label><input type="text" id="f_4"></div>
+                            <div class="input-group"><label>تاريخ الميلاد</label><input type="text" id="f_5" placeholder="dd/mm/yyyy"></div>
+                            <div class="input-group"><label>رقم الجوال</label><input type="text" id="f_6"></div>
+                            <div class="input-group"><label>رقم الجوال الثاني</label><input type="text" id="f_7"></div>
+                            <div class="input-group"><label>الحالة الاجتماعية</label><input type="text" id="f_8"></div>
+                            <h3 class="section-title">الزوجات والأفراد (أعداد)</h3>
+                            <div class="input-group"><label>اسم الزوجة الأولى</label><input type="text" id="f_9"></div>
+                            <div class="input-group"><label>هوية الزوجة الأولى</label><input type="text" id="f_10"></div>
+                            <div class="input-group"><label>ميلاد الزوجة الأولى</label><input type="text" id="f_11" placeholder="dd/mm/yyyy"></div>
+                            <div class="input-group"><label>اسم الزوجة الثانية</label><input type="text" id="f_12"></div>
+                            <div class="input-group"><label>هوية الزوجة الثانية</label><input type="text" id="f_13"></div>
+                            <div class="input-group"><label>ميلاد الزوجة الثانية</label><input type="text" id="f_14" placeholder="dd/mm/yyyy"></div>
+                            <div class="input-group"><label>(يوم-سنتين) ذكر</label><input type="number" id="f_15" value="0"></div>
+                            <div class="input-group"><label>(يوم-سنتين) انثى</label><input type="number" id="f_16" value="0"></div>
+                            <div class="input-group"><label>(3-6 سنوات) ذكر</label><input type="number" id="f_17" value="0"></div>
+                            <div class="input-group"><label>(3-6 سنوات) انثى</label><input type="number" id="f_18" value="0"></div>
+                            <div class="input-group"><label>(7-12 سنة) ذكر</label><input type="number" id="f_19" value="0"></div>
+                            <div class="input-group"><label>(7-12 سنة) انثى</label><input type="number" id="f_20" value="0"></div>
+                            <div class="input-group"><label>(13-17 سنة) ذكر</label><input type="number" id="f_21" value="0"></div>
+                            <div class="input-group"><label>(13-17 سنة) انثى</label><input type="number" id="f_22" value="0"></div>
+                            <div class="input-group"><label>(18-60 سنة) ذكر</label><input type="number" id="f_23" value="0"></div>
+                            <div class="input-group"><label>(18-60 سنة) انثى</label><input type="number" id="f_24" value="0"></div>
+                            <div class="input-group"><label>(فوق 60) ذكر</label><input type="number" id="f_25" value="0"></div>
+                            <div class="input-group"><label>(فوق 60) انثى</label><input type="number" id="f_26" value="0"></div>
+                            <div class="input-group"><label>العدد الكلي للأفراد</label><input type="number" id="f_27" value="1" style="background:#e0f2fe; font-weight:bold;"></div>
+                            <h3 class="section-title">السكن والحالة</h3>
+                            <div class="input-group"><label>عنوان السكن الأصلي</label><input type="text" id="f_28"></div>
+                            <div class="input-group"><label>المحافظة الأصلية</label><input type="text" id="f_29"></div>
+                            <div class="input-group"><label>عنوان السكن الحالي</label><input type="text" id="f_30"></div>
+                            <div class="input-group"><label>المحافظة الحالية</label><input type="text" id="f_31"></div>
+                            <div class="input-group"><label>المسكن</label><select id="f_32"><option value="">-- اختر --</option><option value="خيمة">خيمة</option><option value="غرفة">غرفة</option><option value="مركز إيواء">مركز إيواء</option></select></div>
+                            <div class="input-group"><label>الحالة</label><select id="f_33"><option value="">-- اختر --</option><option value="نازح">نازح</option><option value="مقيم">مقيم</option></select></div>
+                            <div class="input-group"><label>المهنة</label><select id="f_34"><option value="">-- اختر --</option><option value="موظف حكومي">موظف حكومي</option><option value="عاطل عن العمل">عاطل عن العمل</option><option value="عامل دخل محدود">عامل دخل محدود</option></select></div>
+                            <div class="input-group"><label>نوع الضرر</label><select id="f_35"><option value="">-- اختر --</option><option value="هدم كلي">هدم كلي</option><option value="جزئي">جزئي</option></select></div>
+                            <h3 class="section-title">الرعاية الصحية والملاحظات</h3>
+                            <div class="input-group"><label>ذوي الاعاقة</label><input type="text" id="f_36"></div>
+                            <div class="input-group"><label>امراض مزمنة</label><input type="text" id="f_37"></div>
+                            <div class="input-group"><label>تعيل الاسرة امرأة؟</label><input type="text" id="f_38"></div>
+                            <div class="input-group"><label>امرأة مرضعة/حامل؟</label><input type="text" id="f_39"></div>
+                            <div class="input-group"><label>ملاحظات أخرى</label><input type="text" id="f_40"></div>
+                        </div>
+                        <button type="submit" class="btn btn-green">إضافة العائلة للكشف</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2 class="card-title">جدول قاعدة الأسر وفلترة التصدير</h2>
+                    
+                    <!-- أزرار الاستيراد والتصدير -->
+                    <div class="btn-group-tools">
+                        <input type="file" id="imp_families" accept=".xlsx, .xls" style="display:none;" onchange="importExcel(event, 'db_families', 40)">
+                        <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_families').click()">📤 استيراد إكسل</button>
+                        <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('familiesTable', 'قاعدة_الأسر_الكاملة.xlsx')">📥 تصدير كل القواعد</button>
+                        <button class="btn btn-blue" style="margin:0; background-color:#7c3aed;" onclick="exportFilteredExcel()">📥 تصدير النتائج المفلترة فقط</button>
+                        <button class="btn btn-blue" style="margin:0; background-color:#0d9488;" onclick="printDistSheet()">🖨 طباعة كشف توزيع (المفلتر)</button>
+                        <button class="btn btn-blue" style="margin:0; background-color:#475569;" onclick="removeEmptyRows()">🧹 حذف السجلات الفاضية من كل الكشوفات</button>
+                        <button class="btn btn-red" style="margin:0;" onclick="clearDB('db_families', 'قاعدة الأسر')">🗑 تفريغ قاعدة الأسر</button>
+                    </div>
+
+                    <!-- شريط الفلاتر المتقدم -->
+                    <div id="famFilterBar" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:8px; margin-bottom:15px; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #cbd5e1;">
+                        <input type="text" id="famSearch" oninput="filterFamilies()" placeholder="🔍 بحث بالاسم/الهوية..." style="padding:8px; border:1px solid #38bdf8; border-radius:6px;">
+                        <select id="famQatea" onchange="filterFamilies()" style="padding:8px; border:1px solid #38bdf8; border-radius:6px;"><option value="">كل القواطع</option></select>
+                        <select id="famStatus" onchange="filterFamilies()" style="padding:8px; border:1px solid #38bdf8; border-radius:6px;">
+                            <option value="">كل الحالات (نازح/مقيم)</option><option value="نازح">نازح</option><option value="مقيم">مقيم</option>
+                        </select>
+                        <select id="famHousing" onchange="filterFamilies()" style="padding:8px; border:1px solid #38bdf8; border-radius:6px;">
+                            <option value="">كل أنواع السكن</option><option value="خيمة">خيمة</option><option value="غرفة">غرفة</option><option value="مركز إيواء">مركز إيواء</option>
+                        </select>
+                        <!-- حقل فلترة أعداد الأفراد المتعدد (مثال: 3, 4, 5) -->
+                        <input type="text" id="famMultiMembers" oninput="filterFamilies()" placeholder="أعداد الأفراد (مثال: 3,4,5)" title="اكتب الأعداد مفصولة بفواصل" style="padding:8px; border:1px solid #38bdf8; border-radius:6px; background:#fff;">
+                        
+                        <button type="button" class="btn btn-blue" style="margin:0; padding:8px;" onclick="resetFamFilter()">✖ إلغاء الفلاتر</button>
+                    </div>
+                    <div style="margin-bottom:10px; font-weight:bold; color:#0f172a;"><span id="famCount"></span></div>
+
+                    <div class="table-responsive">
+                        <table id="familiesTable"><thead><tr><th>#</th><th>كود الأسرة</th><th>القاطع</th><th>الاسم رباعي</th><th>الهوية</th><th>الجنس</th><th>الميلاد</th><th>الجوال</th><th>جوال بديل</th><th>الحالة الاجتماعية</th><th>الزوجة 1</th><th>هوية الزوجة 1</th><th>ميلاد الزوجة 1</th><th>الزوجة 2</th><th>هوية الزوجة 2</th><th>ميلاد الزوجة 2</th><th>(يوم-سنتين) ذكر</th><th>(يوم-سنتين) انثى</th><th>(3-6) ذكر</th><th>(3-6) انثى</th><th>(7-12) ذكر</th><th>(7-12) انثى</th><th>(13-17) ذكر</th><th>(13-17) انثى</th><th>(18-60) ذكر</th><th>(18-60) انثى</th><th>(+60) ذكر</th><th>(+60) انثى</th><th>العدد الكلي</th><th>السكن الأصلي</th><th>المافظة الاصلية</th><th>السكن الحالي</th><th>المحافظة الحالية</th><th>المسكن</th><th>الحالة</th><th>المهنة</th><th>الضرر</th><th>إعاقة</th><th>امراض مزمنة</th><th>تعيل امرأة؟</th><th>حامل/مرضعة؟</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody></tbody></table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. كشف الاستلام -->
+            <div id="aids-tab" class="tab-content">
+                <div class="header"><h1>📦 كشف الاستلام</h1></div>
+                <div class="card">
+                    <h2 class="card-title">➕ إضافة استلام لعائلة</h2>
+                    <form onsubmit="addAid(event)">
+                        <div class="form-grid">
+                            <div class="input-group"><label>الاسم</label><input type="text" id="a_1" required></div>
+                            <div class="input-group"><label>الهوية</label><input type="text" id="a_2" required></div>
+                            <div class="input-group"><label>القاطع</label><input type="text" id="a_3"></div>
+                            <!-- تم إضافة الداتاليست هنا -->
+                            <div class="input-group">
+                                <label>نوع المساعدة</label>
+                                <input type="text" id="a_4" list="aidTypesGlobalList" required autocomplete="off">
+                                <datalist id="aidTypesGlobalList"></datalist>
+                            </div>
+                            <div class="input-group"><label>ملاحظة</label><input type="text" id="a_5"></div>
+                            <div class="input-group"><label>الكمية</label><input type="text" id="a_6" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-green">حفظ</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <div class="btn-group-tools">
+                        <input type="text" id="aidsSearch" oninput="filterSimpleTable('aidsTable','aidsSearch')" placeholder="🔍 بحث بالاسم / الهوية / النوع..." style="flex:1;min-width:220px;padding:9px;border:2px solid #38bdf8;border-radius:6px;">
+                        <input type="file" id="imp_aids" accept=".xlsx, .xls" style="display:none;" onchange="importExcel(event, 'db_aids', 6)">
+                        <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_aids').click()">📤 استيراد إكسل</button>
+                        <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('aidsTable', 'المساعدات.xlsx')">📥 تصدير إكسل</button>
+                        <button class="btn btn-red" style="margin:0;" onclick="clearDB('db_aids', 'كشف الاستلام')">🗑 تفريغ الكشف</button>
+                    </div>
+                    <div class="table-responsive"><table id="aidsTable"><thead><tr><th>#</th><th>الاسم</th><th>الهوية</th><th>القاطع</th><th>النوع</th><th>ملاحظة</th><th>الكمية</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- 3. كشف المصابين -->
+            <div id="injured-tab" class="tab-content">
+                <div class="header"><h1>🩹 كشف المصابين</h1></div>
+                <div class="card">
+                    <h2 class="card-title">➕ إضافة مصاب</h2>
+                    <form onsubmit="addInjured(event)">
+                        <div class="form-grid">
+                            <div class="input-group"><label>اسم المصاب</label><input type="text" id="i_1" required></div>
+                            <div class="input-group"><label>الهوية</label><input type="text" id="i_2" required></div>
+                            <div class="input-group"><label>الميلاد</label><input type="text" id="i_3" placeholder="dd/mm/yyyy"></div>
+                            <div class="input-group"><label>نوع الاصابة</label><input type="text" id="i_4"></div>
+                            <div class="input-group"><label>الجوال</label><input type="text" id="i_5"></div>
+                            <div class="input-group"><label>ملاحظات</label><input type="text" id="i_6"></div>
+                            <div class="input-group"><label>بقاعدة الأسر؟</label><input type="text" id="i_7" value="نعم"></div>
+                        </div>
+                        <button type="submit" class="btn btn-green">إضافة</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <div class="btn-group-tools">
+                        <input type="text" id="injuredSearch" oninput="filterSimpleTable('injuredTable','injuredSearch')" placeholder="🔍 بحث بالاسم / الهوية / الإصابة..." style="flex:1;min-width:220px;padding:9px;border:2px solid #38bdf8;border-radius:6px;">
+                        <input type="file" id="imp_injured" accept=".xlsx, .xls" style="display:none;" onchange="importExcel(event, 'db_injured', 7)">
+                        <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_injured').click()">📤 استيراد إكسل</button>
+                        <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('injuredTable', 'المصابين.xlsx')">📥 تصدير إكسل</button>
+                        <button class="btn btn-red" style="margin:0;" onclick="clearDB('db_injured', 'كشف المصابين')">🗑 تفريغ الكشف</button>
+                    </div>
+                    <div class="table-responsive"><table id="injuredTable"><thead><tr><th>#</th><th>الاسم</th><th>الهوية</th><th>الميلاد</th><th>الاصابة</th><th>الجوال</th><th>ملاحظات</th><th>بقاعدة الأسر</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- 4. كشف الأيتام -->
+            <div id="orphans-tab" class="tab-content">
+                <div class="header"><h1>👦 كشف الأيتام</h1></div>
+                <div class="card">
+                    <h2 class="card-title">➕ إضافة يتيم</h2>
+                    <form onsubmit="addOrphan(event)">
+                        <div class="form-grid">
+                            <div class="input-group"><label>اسم اليتيم</label><input type="text" id="o_1" required></div>
+                            <div class="input-group"><label>هوية اليتيم</label><input type="text" id="o_2"></div>
+                            <div class="input-group"><label>ميلاده</label><input type="text" id="o_3" placeholder="dd/mm/yyyy"></div>
+                            <div class="input-group"><label>اسم الوصي</label><input type="text" id="o_4"></div>
+                            <div class="input-group"><label>هوية الوصي</label><input type="text" id="o_5"></div>
+                            <div class="input-group"><label>تاريخ الاستشهاد</label><input type="text" id="o_6" placeholder="dd/mm/yyyy"></div>
+                            <div class="input-group"><label>الوالد/ة الشهيد/ة</label><input type="text" id="o_7"></div>
+                            <div class="input-group"><label>هوية الشهيد/ة</label><input type="text" id="o_8"></div>
+                            <div class="input-group"><label>جوال</label><input type="text" id="o_9"></div>
+                        </div>
+                        <button type="submit" class="btn btn-green">إضافة</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <div class="btn-group-tools">
+                        <input type="text" id="orphansSearch" oninput="filterSimpleTable('orphansTable','orphansSearch')" placeholder="🔍 بحث بالاسم / الهوية / الوصي..." style="flex:1;min-width:220px;padding:9px;border:2px solid #38bdf8;border-radius:6px;">
+                        <input type="file" id="imp_orphans" accept=".xlsx, .xls" style="display:none;" onchange="importExcel(event, 'db_orphans', 9)">
+                        <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_orphans').click()">📤 استيراد إكسل</button>
+                        <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('orphansTable', 'الأيتام.xlsx')">📥 تصدير إكسل</button>
+                        <button class="btn btn-red" style="margin:0;" onclick="clearDB('db_orphans', 'كشف الأيتام')">🗑 تفريغ الكشف</button>
+                    </div>
+                    <div class="table-responsive"><table id="orphansTable"><thead><tr><th>#</th><th>اسم اليتيم</th><th>الهوية</th><th>الميلاد</th><th>الوصي</th><th>هوية الوصي</th><th>تاريخ الاستشهاد</th><th>الشهيد/ة</th><th>هوية الشهيد/ة</th><th>جوال</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- 5. كشف الأطفال -->
+            <div id="children-tab" class="tab-content">
+                <div class="header"><h1>👶 كشف الأطفال</h1></div>
+                <div class="card">
+                    <h2 class="card-title">➕ إضافة طفل</h2>
+                    <form onsubmit="addChild(event)">
+                        <div class="form-grid">
+                            <div class="input-group"><label>اسم الطفل</label><input type="text" id="c_1" required></div>
+                            <div class="input-group"><label>هوية الطفل</label><input type="text" id="c_2"></div>
+                            <div class="input-group"><label>تاريخ الميلاد</label><input type="text" id="c_3" placeholder="dd/mm/yyyy"></div>
+                            <div class="input-group"><label>الجنس</label><input type="text" id="c_4"></div>
+                            <div class="input-group"><label>اسم الأب</label><input type="text" id="c_5"></div>
+                            <div class="input-group"><label>هوية الأب</label><input type="text" id="c_6"></div>
+                            <div class="input-group"><label>جوال الأب</label><input type="text" id="c_7"></div>
+                            <div class="input-group"><label>اسم الأم</label><input type="text" id="c_8"></div>
+                            <div class="input-group"><label>هوية الأم</label><input type="text" id="c_9"></div>
+                            <div class="input-group"><label>ملاحظات</label><input type="text" id="c_10"></div>
+                        </div>
+                        <button type="submit" class="btn btn-green">إضافة</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <div class="btn-group-tools">
+                        <input type="text" id="childrenSearch" oninput="filterSimpleTable('childrenTable','childrenSearch')" placeholder="🔍 بحث بالاسم / الهوية / الأب / الأم..." style="flex:1;min-width:220px;padding:9px;border:2px solid #38bdf8;border-radius:6px;">
+                        <input type="file" id="imp_children" accept=".xlsx, .xls" style="display:none;" onchange="importExcel(event, 'db_children', 10)">
+                        <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_children').click()">📤 استيراد إكسل</button>
+                        <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('childrenTable', 'الأطفال.xlsx')">📥 تصدير إكسل</button>
+                        <button class="btn btn-red" style="margin:0;" onclick="clearDB('db_children', 'كشف الأطفال')">🗑 تفريغ الكشف</button>
+                    </div>
+                    <div class="table-responsive"><table id="childrenTable"><thead><tr><th>#</th><th>اسم الطفل</th><th>الهوية</th><th>الميلاد</th><th>الجنس</th><th>اسم الأب</th><th>هوية الأب</th><th>الجوال</th><th>اسم الأم</th><th>هوية الأم</th><th>ملاحظات</th><th>العمر (سنوات)</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- 6. كشف الأمراض المزمنة -->
+            <div id="chronic-tab" class="tab-content">
+                <div class="header"><h1>💊 الأمراض المزمنة</h1></div>
+                <div class="card">
+                    <h2 class="card-title">➕ إضافة مريض</h2>
+                    <form onsubmit="addChronic(event)">
+                        <div class="form-grid">
+                            <div class="input-group"><label>المريض</label><input type="text" id="ch_1" required></div>
+                            <div class="input-group"><label>الهوية</label><input type="text" id="ch_2" required></div>
+                            <div class="input-group"><label>الميلاد</label><input type="text" id="ch_3" placeholder="dd/mm/yyyy"></div>
+                            <div class="input-group"><label>الجنس</label><input type="text" id="ch_4"></div>
+                            <div class="input-group"><label>المرض</label><input type="text" id="ch_5"></div>
+                            <div class="input-group"><label>الدواء</label><input type="text" id="ch_6"></div>
+                            <div class="input-group"><label>الجوال</label><input type="text" id="ch_7"></div>
+                        </div>
+                        <button type="submit" class="btn btn-green">إضافة</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <div class="btn-group-tools">
+                        <input type="text" id="chronicSearch" oninput="filterSimpleTable('chronicTable','chronicSearch')" placeholder="🔍 بحث بالمريض / الهوية / المرض..." style="flex:1;min-width:220px;padding:9px;border:2px solid #38bdf8;border-radius:6px;">
+                        <input type="file" id="imp_chronic" accept=".xlsx, .xls" style="display:none;" onchange="importExcel(event, 'db_chronic', 7)">
+                        <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_chronic').click()">📤 استيراد إكسل</button>
+                        <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('chronicTable', 'أمراض.xlsx')">📥 تصدير إكسل</button>
+                        <button class="btn btn-red" style="margin:0;" onclick="clearDB('db_chronic', 'كشف الأمراض المزمنة')">🗑 تفريغ الكشف</button>
+                    </div>
+                    <div class="table-responsive"><table id="chronicTable"><thead><tr><th>#</th><th>المريض</th><th>الهوية</th><th>الميلاد</th><th>الجنس</th><th>المرض</th><th>الدواء</th><th>الجوال</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- 7. صندوق المخيم (المحدث والمنفصل) -->
+            <div id="fund-tab" class="tab-content">
+                <div class="header"><h1>💰 صندوق المخيم</h1></div>
+                <div class="fund-stats">
+                    <div class="f-stat f-in">إجمالي الوارد <span id="totalIn">0 ₪</span></div>
+                    <div class="f-stat f-out">إجمالي الصادر <span id="totalOut">0 ₪</span></div>
+                    <div class="f-stat f-bal">المحصلة (الرصيد) <span id="totalBalance">0 ₪</span></div>
+                </div>
+                
+                <div class="card">
+                    <h2 class="card-title">➕ تسجيل حركة مالية</h2>
+                    <form onsubmit="addFund(event)">
+                        <div class="form-grid">
+                            <div class="input-group"><label>التاريخ</label><input type="date" id="fu_1" required></div>
+                            <div class="input-group">
+                                <label>نوع الحركة</label>
+                                <select id="fu_2" required>
+                                    <option value="وارد - مساهمة عائلة (5 شواقل)">وارد - مساهمة (5)</option>
+                                    <option value="وارد - تبرعات أخرى">وارد - أخرى</option>
+                                    <option value="صادر - مصروفات مخيم">صادر - مصروفات</option>
+                                </select>
+                            </div>
+                            <div class="input-group"><label>المبلغ</label><input type="number" id="fu_3" required min="1"></div>
+                            <div class="input-group"><label>الاسم/الجهة</label><input type="text" id="fu_4" required></div>
+                            <div class="input-group"><label>ملاحظات</label><input type="text" id="fu_5"></div>
+                        </div>
+                        <button type="submit" class="btn btn-green">حفظ الحركة</button>
+                    </form>
+                </div>
+                
+                <!-- أزرار التحكم العامة بالصندوق -->
+                <div class="card" style="margin-bottom: 20px;">
+                   <div class="btn-group-tools">
+                       <input type="text" id="fundSearch" onkeyup="filterFund()" placeholder="بحث عن عائلة/جهة..." style="flex:1; padding:10px; border:2px solid #38bdf8; border-radius:4px; max-width:300px;">
+                       <button class="btn btn-red" style="margin:0;" onclick="clearDB('db_fund', 'جميع حركات الصندوق')">🗑 تفريغ الصندوق بالكامل</button>
+                   </div>
+                </div>
+
+                <div style="display:flex; flex-wrap: wrap; gap: 20px;">
+                    <!-- الحركات الواردة -->
+                    <div class="card" style="flex:1; min-width: 300px; border-top-color:#10b981;">
+                        <h2 class="card-title" style="color:#10b981;">📥 الحركات الواردة</h2>
+                        <div class="btn-group-tools">
+                            <input type="file" id="imp_fund_in" accept=".xlsx, .xls" style="display:none;" onchange="importFund(event, 'in')">
+                            <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_fund_in').click()">📤 استيراد الوارد</button>
+                            <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('fundInTable', 'الوارد.xlsx')">📥 تصدير الوارد</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="fundInTable"><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الجهة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody></tbody></table>
+                        </div>
+                    </div>
+                    
+                    <!-- الحركات الصادرة -->
+                    <div class="card" style="flex:1; min-width: 300px; border-top-color:#ef4444;">
+                        <h2 class="card-title" style="color:#ef4444;">📤 الحركات الصادرة</h2>
+                        <div class="btn-group-tools">
+                            <input type="file" id="imp_fund_out" accept=".xlsx, .xls" style="display:none;" onchange="importFund(event, 'out')">
+                            <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_fund_out').click()">📤 استيراد الصادر</button>
+                            <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('fundOutTable', 'الصادر.xlsx')">📥 تصدير الصادر</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="fundOutTable"><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الجهة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody></tbody></table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 8. كشف دافعي الاشتراك -->
+            <div id="subscribers-tab" class="tab-content">
+                <div class="header"><h1>💸 دافعو الاشتراك (من العائلات المسجلة)</h1></div>
+                <div class="card">
+                    <h2 class="card-title">قائمة العائلات وحالة الدفع</h2>
+                    <div class="btn-group-tools">
+                        <input type="text" id="subSearch" onkeyup="filterSubscribers()" placeholder="بحث عن عائلة أو هوية..." style="flex:1; padding:10px; border:2px solid #38bdf8; border-radius:4px; max-width:300px;">
+                        <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('subscribersTable', 'دافعو_الاشتراك.xlsx')">📥 تصدير الكشف</button>
+                        <button class="btn btn-green" style="margin:0;" onclick="loadSubscribers()">🔄 تحديث البيانات</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table id="subscribersTable">
+                            <thead><tr><th>#</th><th>اسم العائلة</th><th>رقم الهوية</th><th>القاطع</th><th>إجمالي المدفوع</th><th>حالة الدفع</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="modalBg" class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
+
+    <script defer src="/assets/startup-r3.js"></script>
+    <script defer src="/assets/admin-r3.js?v=sync-fix-20261122"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "rules": {
+    ".read": "auth != null && root.child('admins').child(auth.uid).val() === 'super_admin'",
+    ".write": "auth != null && root.child('admins').child(auth.uid).val() === 'super_admin'",
+    "admins": {"$uid": {".read": "auth != null && auth.uid === $uid"}},
+    "claims": {"$uid": {".read": "auth != null && auth.uid === $uid"}},
+    "portal": {"$id": {".read": "auth != null && root.child('claims').child(auth.uid).child('id').val() === $id"}},
+    "inbox": {"$id": {"$key": {
+      ".write": "auth != null && root.child('claims').child(auth.uid).child('id').val() === $id && !data.exists() && newData.exists()",
+      ".validate": "newData.hasChildren(['type','date','payload']) && newData.child('type').isString() && newData.child('type').val().length < 30"
+    }}}
+  }
+}
