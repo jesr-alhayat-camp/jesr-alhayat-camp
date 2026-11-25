@@ -12,7 +12,7 @@
 
         const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const emailOf=id=>safeKey(digitsOf(id))+'@camp.local';
-        let portalNotes=[], portalReqs=[], vaultKey='', sentLocal=[], helpFrom='normalLogin';
+        let portalNotes=[], portalReqs=[], sentLocal=[], helpFrom='normalLogin';
         let currentFamilyRow=null, portalAids=[], portalChildren=[], portalOrphans=[], portalInjured=[], currentId='', fails=0, lockedUntil=0, idleT;
 
 
@@ -77,10 +77,21 @@
             if(!u||!currentId) return;
             if(!strongPw(nw)){notify('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل وتحتوي حروفاً وأرقاماً.');return;}
             if(nw===cur){notify('كلمة المرور الجديدة يجب أن تختلف عن الحالية.');return;}
-            const cleanKey=safeKey(digitsOf(currentId));
+            if (!window.CAMP_RECOVERY_URL) {
+                notify('خدمة تغيير كلمة السر لسه مش مربوطة.');
+                return;
+            }
             u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,cur))
-              .then(()=>u.updatePassword(nw).then(()=>saveVault(cleanKey,nw).then(()=>true).catch(err=>{console.error('vault',err);return false;})))
-              .then(vaultOk=>{
+              .then(async () => {
+                  const token = await u.getIdToken(true);
+                  const response = await fetch(new URL('/api/change-password', window.CAMP_RECOVERY_URL), {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + token},
+                      body: JSON.stringify({password:nw})
+                  });
+                  if (!response.ok) throw new Error('تعذر إكمال تغيير كلمة السر.');
+              })
+              .then(()=>{
                   notify('✅ تم تغيير كلمة المرور بنجاح.');
                   form.reset();switchView('dashboard');
               })
@@ -90,11 +101,6 @@
                   else notify('❌ تعذر تغيير كلمة المرور: '+(c||err.message));
               });
         });
-
-        function saveVault(key,pw){
-            return encVault(pw).then(v=>{ if(!v) return; return rdb.ref('pwvault/'+key).set(v); });
-        }
-        function syncVault(){ /* لم يعد يتم تخزين كلمة المرور كنص صريح */ }
 
         function loadPortal(id){
             const __portalStart = performance.now();
@@ -110,7 +116,6 @@
                 portalInjured=Object.values(v.injured||{});
                 portalNotes=Object.values(v.notes||{}); portalMsgs=Object.values(v.msgs||{});
                 portalReqs=Object.values(v.reqs||{});
-                vaultKey=v.vk||'';
                 renderedPortalTabs.clear(); currentTab=portalRoute() || 'home'; loadDashboard(); resetIdle();
             }).catch(error=>{
                 const denied = /permission.?denied/i.test(String(error && (error.code || error.message)));
@@ -167,7 +172,7 @@
 
 
         /* ===== ثوابت التواصل ===== */
-        const CAMP_PHONE_INTL='972599606955', CAMP_PHONE_SHOW='00972599606955', CAMP_GROUP='https://chat.whatsapp.com/KJxAeBhippD8Draz69zz4f';
+        const CAMP_CONTACT_NAME='مروان فؤاد حمد', CAMP_PHONE_INTL='972599885727', CAMP_PHONE_SHOW='0599885727', CAMP_GROUP='https://chat.whatsapp.com/HAFVDxl8m9I74ofYwM1yOx?s=cl&p=a&iam=2';
         const FAM_LABELS=['القاطع','الاسم رباعي','رقم الهوية','الجنس','تاريخ الميلاد','رقم الجوال','رقم الجوال الثاني','الحالة الاجتماعية','اسم الزوجة الأولى','هوية الزوجة الأولى','ميلاد الزوجة الأولى','اسم الزوجة الثانية','هوية الزوجة الثانية','ميلاد الزوجة الثانية','(يوم-سنتين) ذكر','(يوم-سنتين) أنثى','(3-6 سنوات) ذكر','(3-6 سنوات) أنثى','(7-12 سنة) ذكر','(7-12 سنة) أنثى','(13-17 سنة) ذكر','(13-17 سنة) أنثى','(18-60 سنة) ذكر','(18-60 سنة) أنثى','(فوق 60) ذكر','(فوق 60) أنثى','العدد الكلي للأفراد','عنوان السكن الأصلي','المحافظة الأصلية','عنوان السكن الحالي','المحافظة الحالية','المسكن','الحالة','المهنة','نوع الضرر','ذوو الإعاقة','أمراض مزمنة','تعيل الأسرة امرأة؟','امرأة مرضعة/حامل؟','ملاحظات'];
         const REQ_TYPES={db_edit_requests:'تعديل بيانات',db_children:'إضافة / تعديل طفل',db_chronic:'إضافة مريض مزمن',db_injured:'تسجيل إصابة',db_complaints:'شكوى / طلب'};
         const ST_TXT={pending:'قيد المراجعة',accepted:'تمت الموافقة',rejected:'مرفوض',answered:'تم الرد',sent:'أُرسل (بانتظار استلام الإدارة)'};
@@ -183,6 +188,7 @@
             const name=currentFamilyRow?currentFamilyRow[1]:'';
             const msg='السلام عليكم، أنا '+(name||'')+(currentId?' (هوية '+currentId+')':'')+' وأحتاج مساعدة بخصوص: ';
             const html='<h4>📞 التواصل مع الإدارة</h4>'
+              +'<div class="sub-muted">'+CAMP_CONTACT_NAME+'</div>'
               +'<div style="font-size:13px;color:#334155">أوقات التواصل: من الساعة <b>12 ظهراً</b> حتى <b>6 مساءً</b></div>'
               +'<div style="font-size:13px;margin:6px 0"><span class="dot" style="background:'+(open?'#16a34a':'#9ca3af')+'"></span>'+(open?'متاح الآن للرد':'خارج أوقات التواصل حالياً، يمكنك ترك رسالة وسيتم الرد في أوقات الدوام')+'</div>'
               +'<a class="a-wa" target="_blank" rel="noopener" href="https://wa.me/'+CAMP_PHONE_INTL+'?text='+encodeURIComponent(msg)+'">💬 واتساب مباشر</a>'
@@ -271,22 +277,11 @@
             const rows=[['الاسم',r[1]],['رقم الهوية',r[2]],['تاريخ الميلاد',displayBirthDate(r[4])],...(r[8]?[['الزوجة الأولى',r[8]+' — ميلاد: '+displayBirthDate(r[10])]]:[]),...(r[11]?[['الزوجة الثانية',r[11]+' — ميلاد: '+displayBirthDate(r[13])]]:[]),['القاطع',r[0]],['عدد الأفراد',r[26]],['رقم الجوال',r[5]],['المسكن',r[31]],['الحالة',r[32]],['المهنة',r[33]]];
             const kids=portalChildren.map(c=>'<tr><td>'+esc(c[0])+'</td><td>'+esc(c[1]||'-')+'</td><td>'+esc(displayBirthDate(c[2]))+'</td><td>'+esc(ageOf(c[2])||'-')+'</td></tr>').join('')||'<tr><td colspan="4" style="text-align:center">لا يوجد</td></tr>';
             w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>بطاقة عائلة</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:30px;color:#0f172a}h1{text-align:center;margin:0;font-size:22px}h2{text-align:center;margin:4px 0 20px;font-size:15px;color:#475569;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:18px}td,th{border:1px solid #94a3b8;padding:8px;font-size:14px;text-align:right}th{background:#e2e8f0}.k{width:30%;background:#f1f5f9;font-weight:bold}.f{text-align:center;color:#64748b;font-size:12px;margin-top:30px}</style></head><body>'
-              +'<h1>⛺ مخيم الأصدقاء الجلاء</h1><h2>بطاقة بيانات أسرة</h2><table>'
+              +'<h1>⛺ مخيم جسر الحياة</h1><h2>بطاقة بيانات أسرة</h2><table>'
               +rows.map(x=>'<tr><td class="k">'+esc(x[0])+'</td><td>'+esc(x[1]||'-')+'</td></tr>').join('')
               +'</table><h3>الأطفال المسجلون</h3><table><tr><th>الاسم</th><th>الهوية</th><th>تاريخ الميلاد</th><th>العمر</th></tr>'+kids+'</table>'
               +'<div class="f">طُبعت بتاريخ '+esc(new Date().toLocaleDateString('ar-EG'))+' · للتواصل مع الإدارة: '+CAMP_PHONE_SHOW+' (12 ظهراً - 6 مساءً)</div></body></html>');
             w.document.close(); setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
-        }
-
-        /* ===== حماية كلمات المرور: تخزين مشفّر فقط ===== */
-        const VAULT_PRE='rsa1:';
-        async function encVault(pw){
-            if(!vaultKey||!window.crypto||!crypto.subtle) return null;
-            try{
-                const k=await crypto.subtle.importKey('jwk',JSON.parse(vaultKey),{name:'RSA-OAEP',hash:'SHA-256'},false,['encrypt']);
-                const c=await crypto.subtle.encrypt({name:'RSA-OAEP'},k,new TextEncoder().encode(pw));
-                return VAULT_PRE+btoa(String.fromCharCode.apply(null,new Uint8Array(c)));
-            }catch(e){return null;}
         }
 
         function openEditForm() {
@@ -448,7 +443,7 @@
 
 
             document.getElementById('changePwdForm').reset();
-            currentFamilyRow = null; currentId=''; portalNotes=[]; portalReqs=[]; sentLocal=[]; vaultKey=''; history.replaceState(null, '', location.pathname + location.search); auth.signOut();
+            currentFamilyRow = null; currentId=''; portalNotes=[]; portalReqs=[]; sentLocal=[]; history.replaceState(null, '', location.pathname + location.search); auth.signOut();
             switchView('normalLogin');
         });
         /* ===== تحسينات الواجهة ===== */
@@ -653,7 +648,7 @@ function kpiRefresh() {
     $id('kpAids').textContent = portalAids.length;
     $id('kpReqs').textContent = sentLocal.length + portalReqs.length;
     const nm = (currentFamilyRow[1] || '').trim().split(/\s+/).slice(0, 2).join(' ');
-    $id('tbName').textContent = 'مرحباً ' + nm; const sub = document.querySelector('.tb-title small'); if (sub) sub.textContent = window.famCode ? 'كود الأسرة: ' + window.famCode : 'بوابة عائلة مخيم الأصدقاء الجلاء'; $id('umName').textContent = currentFamilyRow[1] || '';
+    $id('tbName').textContent = 'مرحباً ' + nm; const sub = document.querySelector('.tb-title small'); if (sub) sub.textContent = window.famCode ? 'كود الأسرة: ' + window.famCode : 'بوابة عائلة مخيم جسر الحياة'; $id('umName').textContent = currentFamilyRow[1] || '';
 }
 function fixDates() {
     document.querySelectorAll('#myReqsTable tbody tr').forEach(tr => { const c = tr.cells[1]; if (c && tr.cells.length > 2) { const v = formatDateValue(c.textContent); if (v) c.textContent = v; } });
@@ -681,7 +676,7 @@ function fixDates() {
     const shell = document.createElement('div'); shell.id = 'appShell'; shell.className = 'hidden';
     shell.innerHTML = '<aside id="rail" aria-label="القائمة الرئيسية"><div class="rail-logo">⛺</div><nav id="railNav">' + nav(TABS)
         + '<div class="rail-sep"></div>' + nav([['help', '💬', 'المساعدة والتواصل'], ['pwd', '🔒', 'كلمة المرور'], ['out', '🚪', 'تسجيل الخروج']]) + '</nav></aside>'
-        + '<div id="appBody"><header id="topbar"><div class="tb-title"><b id="tbName">مرحباً</b><small>بوابة عائلة مخيم الأصدقاء الجلاء</small></div>'
+        + '<div id="appBody"><header id="topbar"><div class="tb-title"><b id="tbName">مرحباً</b><small>بوابة عائلة مخيم جسر الحياة</small></div>'
         + '<div class="tb-actions"><button type="button" class="tb-btn" id="tbHelp" aria-label="المساعدة">💬</button><button type="button" class="tb-user" id="tbUser" aria-label="القائمة الشخصية"><span class="avatar"></span></button>'
         + '<div id="userMenu" class="user-menu hidden"><div class="um-name" id="umName"></div><button type="button" data-m="profile">👤 بياناتي</button><button type="button" data-m="help">💬 المساعدة والتواصل</button><button type="button" data-m="pwd">🔒 تغيير كلمة المرور</button><button type="button" data-m="out">🚪 تسجيل الخروج</button></div></div></header>'
         + '<main id="appMain"></main></div><nav id="bottomNav" aria-label="التنقل">' + nav(TABS) + '</nav>';

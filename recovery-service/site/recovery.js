@@ -2,6 +2,8 @@ const element = id => document.getElementById(id);
 const statusBox = element('status');
 const sessionKey = 'camp-first-activation';
 let session = sessionStorage.getItem(sessionKey);
+const resetCode = new URLSearchParams(location.search).get('reset');
+if (resetCode) history.replaceState(null, '', location.pathname);
 
 function view(name, message = '') {
   for (const id of ['identity', 'questions', 'password']) element(id).hidden = id !== name;
@@ -37,6 +39,7 @@ function submit(id, action) {
         statusBox.textContent = {
           identity: 'أدخل رقم هوية من 9 أرقام.',
           password: 'استخدم 8 أحرف على الأقل مع حروف وأرقام.',
+          'reset-code': 'الرابط منتهي أو مستخدم. اطلب رابط جديد من الإدارة.',
           authorization: 'انتهت مهلة التحقّق. ارجع لبداية التفعيل وحاول مرة ثانية.'
         }[error.message] || 'تعذّر إكمال الطلب. افحص الاتصال أو تواصل مع الإدارة.';
       }
@@ -84,7 +87,8 @@ submit('questions', async () => {
   }
 });
 submit('password', async () => {
-  const result = await api('password', {password:element('newPassword').value});
+  const password = element('newPassword').value;
+  const result = resetCode ? await api('complete-reset', {code:resetCode, password}) : await api('password', {password});
   element('password').reset();
   showState(result.state);
 });
@@ -96,4 +100,8 @@ async function refresh() {
   }
 }
 
-if (session) refresh();
+if (resetCode) {
+  document.querySelector('h1').textContent = 'إعادة تعيين كلمة سر العائلة';
+  element('password').querySelector('button').textContent = 'حفظ كلمة السر الجديدة';
+  view('password', 'اختار كلمة سر جديدة لحسابك.');
+} else if (session) refresh();

@@ -1,0 +1,8 @@
+{
+  "name": "aljalacamp-test-activation",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": "22.x" },
+  "scripts": { "start": "node start.cjs" },
+  "dependencies": { "firebase-admin": "14.5.1" }
+}

@@ -10,7 +10,40 @@ if (Buffer.byteLength(process.env.CAMP_RECOVERY_SECRET || '') < 32) {
   throw new Error('Set a stable CAMP_RECOVERY_SECRET of at least 32 random bytes.');
 }
 
-const project = 'aljalacamp-test';
+const { issueFamilyResetLink, linkedFamily, requireRecentAdmin } = require('./family-reset.cjs');
+const { createPasswordStore } = require('./password-store.cjs');
+const { changeManagedPassword } = require('./managed-password.cjs');
+const project = process.env.CAMP_FIREBASE_PROJECT || 'aljalacamp-test';
+if (!['aljalacamp-test', 'alhayacamp-a31eb'].includes(project)) {
+  throw new Error('Unsupported CAMP_FIREBASE_PROJECT.');
+}
+const passwordStore = project === 'alhayacamp-a31eb'
+  ? createPasswordStore(process.env.CAMP_PASSWORD_ENCRYPTION_KEY) : null;
+const adminOrigin = 'https://' + project + '.web.app';
+const adminPaths = new Set(['/api/admin/reset-link', '/api/admin/reveal']);
+const changePath = '/api/change-password';
+const resetPath = '/api/complete-reset';
+const apiKey = process.env.CAMP_FIREBASE_WEB_API_KEY;
+if (passwordStore && (!apiKey || !/^https:\/\/[^/]+\/?$/.test(process.env.CAMP_PUBLIC_SERVICE_URL || ''))) {
+  throw new Error('Set CAMP_FIREBASE_WEB_API_KEY and the HTTPS CAMP_PUBLIC_SERVICE_URL.');
+}
+
+function validPassword(password) {
+  return typeof password === 'string' && password.length >= 8 && password.length <= 64
+    && /[A-Za-z\u0600-\u06ff]/.test(password) && /\d/.test(password);
+}
+
+async function firebaseReset(oobCode, newPassword) {
+  const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=' + encodeURIComponent(apiKey), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({oobCode, newPassword}),
+    signal: AbortSignal.timeout(10000)
+  });
+  if (response.status === 400) throw Object.assign(new Error('Invalid reset code.'), {code:'reset-code'});
+  if (!response.ok) throw new Error('Firebase reset request failed.');
+  return response.json();
+}
 const app = initializeApp({
   credential: applicationDefault(), projectId: project,
   databaseURL: 'https://' + project + '-default-rtdb.firebaseio.com'
@@ -73,7 +106,12 @@ async function createFamilyAccount(id, password) {
   if (!claim.committed) return 'contact';
 
   try {
-    await auth.createUser({uid, email:emailOf(id), password});
+    const createAccount = () => auth.createUser({uid, email:emailOf(id), password});
+    if (passwordStore) {
+      await changeManagedPassword(db.ref('managed_family_passwords/' + uid), passwordStore, uid, password, createAccount);
+    } else {
+      await createAccount();
+    }
     return 'completed';
   } catch (error) {
     if (['auth/email-already-exists','auth/uid-already-exists'].includes(error.code)) return 'existing';
@@ -92,15 +130,86 @@ const server = http.createServer(async (req, res) => {
       'Content-Type': contentType,
       'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
     });
-    res.end(fs.readFileSync(path.join(__dirname, 'site', file)));
+    const content = fs.readFileSync(path.join(__dirname, 'site', file), 'utf8');
+    res.end(name === '/' && passwordStore
+      ? content.replace('مخيم الأصدقاء الجلاء', 'مخيم جسر الحياة').replace('https://aljalacamp-test.web.app/', adminOrigin + '/')
+      : content);
     return;
   }
-  if (!endpoints.has(name)) return send(res, 404, {error:'not-found'});
+  if (name === '/healthz' && req.method === 'GET') {
+    return send(res, 200, {status:'ok'});
+  }
+  if (adminPaths.has(name) || name === changePath) {
+    if (req.headers.origin !== adminOrigin) return send(res, 403, {error:'origin'});
+    res.setHeader('Access-Control-Allow-Origin', adminOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Vary', 'Origin');
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      return res.end();
+    }
+  }
+  if (!endpoints.has(name) && !adminPaths.has(name) && name !== changePath && name !== resetPath) return send(res, 404, {error:'not-found'});
   if (req.method !== 'POST') return send(res, 405, {error:'method'});
 
   let body;
   try { body = await readJson(req); } catch { return send(res, 400, {error:'request'}); }
   try {
+    if (adminPaths.has(name) || name === changePath || name === resetPath) {
+      const token = (req.headers.authorization || '').match(/^Bearer (\S+)$/)?.[1];
+      try {
+        if (name === '/api/admin/reset-link') {
+          const firebaseLink = await issueFamilyResetLink(auth, db, token, body.id);
+          if (!passwordStore) return send(res, 200, {link:firebaseLink});
+          const code = new URL(firebaseLink).searchParams.get('oobCode');
+          if (!code) throw new Error('Missing reset code.');
+          const link = new URL('/?reset=' + encodeURIComponent(code), process.env.CAMP_PUBLIC_SERVICE_URL);
+          return send(res, 200, {link:link.href});
+        }
+        if (!passwordStore) return send(res, 404, {error:'not-found'});
+        if (name === '/api/admin/reveal') {
+          const administrator = await requireRecentAdmin(auth, db, token);
+          const user = await linkedFamily(auth, db, body.id);
+          const record = (await db.ref('managed_family_passwords/' + user.uid).get()).val();
+          if (record?.state !== 'ready') return send(res, 404, {error:'unavailable'});
+          const password = passwordStore.decrypt(user.uid, record.encrypted);
+          await db.ref('family_account_audit').push({
+            action:'family-password-revealed', adminUid:administrator.uid, familyUid:user.uid, at:Date.now()
+          });
+          return send(res, 200, {password});
+        }
+        if (!validPassword(body.password)) return send(res, 400, {error:'password'});
+        if (name === resetPath) {
+          if (typeof body.code !== 'string' || !/^[\w-]{10,512}$/.test(body.code)) {
+            return send(res, 400, {error:'reset-code'});
+          }
+          const result = await firebaseReset(body.code);
+          const id = /^([0-9]{9})@camp\.local$/.exec(result.email)?.[1];
+          const user = await linkedFamily(auth, db, id);
+          const ref = db.ref('managed_family_passwords/' + user.uid);
+          await changeManagedPassword(ref, passwordStore, user.uid, body.password, () => firebaseReset(body.code, body.password));
+          return send(res, 200, {state:'completed'});
+        }
+        let account;
+        try { account = await auth.verifyIdToken(token, true); }
+        catch { return send(res, 401, {error:'reauthenticate'}); }
+        const now = Math.floor(Date.now() / 1000);
+        if (!Number.isFinite(account.auth_time) || account.auth_time > now + 30 || now - account.auth_time > 300) {
+          return send(res, 401, {error:'reauthenticate'});
+        }
+        const id = /^([0-9]{9})@camp\.local$/.exec(account.email)?.[1];
+        const user = await linkedFamily(auth, db, id);
+        if (user.uid !== account.uid) return send(res, 403, {error:'account'});
+        const ref = db.ref('managed_family_passwords/' + user.uid);
+        await changeManagedPassword(ref, passwordStore, user.uid, body.password, () => auth.updateUser(user.uid, {password:body.password}));
+        return send(res, 200, {state:'completed'});
+      } catch (error) {
+        const status = {identity:400, 'reset-code':400, reauthenticate:401, role:403, account:404, busy:409}[error.code];
+        if (status) return send(res, status, {error:error.code});
+        throw error;
+      }
+    }
     if (name === '/api/start') {
       const id = digits(body.id);
       if (!/^\d{9}$/.test(id)) return send(res, 400, {error:'identity'});
@@ -161,4 +270,4 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(Number(process.env.PORT || 8080), process.env.HOST || '127.0.0.1',
-  () => console.log('First activation service ready for aljalacamp-test'));
+  () => console.log('First activation service ready for ' + project));

@@ -153,7 +153,7 @@
         }
         function showFamilyByKey(key){
             const fam=famByKey(key); if(!fam){alert('❌ لم يتم العثور على الأسرة في القاعدة.');return;}
-            const wa=waLink(fam[5],'السلام عليكم '+fam[1]+'، معك إدارة مخيم الأصدقاء الجلاء بخصوص: ');
+            const wa=waLink(fam[5],'السلام عليكم '+fam[1]+'، معك إدارة مخيم جسر الحياة بخصوص: ');
             openModal('<h3>👤 '+esc(fam[1])+' <small style="color:#64748b;">('+esc(fam[2])+' - '+esc(fam[0])+')</small></h3>'+familyHTML(fam)
               +'<div class="btnrow"><button class="btn btn-blue" onclick="printFamily(\''+esc(key)+'\')">🖨 طباعة البطاقة</button>'
               +(wa?'<a class="btn btn-green" target="_blank" rel="noopener" href="'+esc(wa)+'">💬 واتساب</a>':'')
@@ -162,12 +162,12 @@
         function printFamily(key){
             const fam=famByKey(key); if(!fam) return;
             const w=window.open('','_blank'); if(!w){alert('اسمح بالنوافذ المنبثقة للطباعة.');return;}
-            w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>بطاقة أسرة</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#0f172a}h1{text-align:center;margin:0;font-size:22px}h2{text-align:center;margin:4px 0 16px;font-size:14px;color:#475569;font-weight:normal}h4{margin:14px 0 6px}table{width:100%;border-collapse:collapse;margin-bottom:8px}td,th{border:1px solid #94a3b8;padding:6px;font-size:12px;text-align:right}th{background:#e2e8f0}@media print{body{padding:0}}</style></head><body><h1>⛺ مخيم الأصدقاء الجلاء</h1><h2>بطاقة بيانات أسرة · '+esc(new Date().toLocaleDateString('en-GB'))+'</h2>'+familyHTML(fam)+'</body></html>');
+            w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>بطاقة أسرة</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#0f172a}h1{text-align:center;margin:0;font-size:22px}h2{text-align:center;margin:4px 0 16px;font-size:14px;color:#475569;font-weight:normal}h4{margin:14px 0 6px}table{width:100%;border-collapse:collapse;margin-bottom:8px}td,th{border:1px solid #94a3b8;padding:6px;font-size:12px;text-align:right}th{background:#e2e8f0}@media print{body{padding:0}}</style></head><body><h1>⛺ مخيم جسر الحياة</h1><h2>بطاقة بيانات أسرة · '+esc(new Date().toLocaleDateString('en-GB'))+'</h2>'+familyHTML(fam)+'</body></html>');
             w.document.close(); setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
             audit('طباعة بطاقة أسرة',fam[1]);
         }
         function renderSrActions(fam){
-            const key=safeKey(digitsOf(fam[2])), wa=waLink(fam[5],'السلام عليكم '+fam[1]+'، معك إدارة مخيم الأصدقاء الجلاء بخصوص: ');
+            const key=safeKey(digitsOf(fam[2])), wa=waLink(fam[5],'السلام عليكم '+fam[1]+'، معك إدارة مخيم جسر الحياة بخصوص: ');
             document.getElementById('srActions').innerHTML='<button class="btn btn-blue" style="margin:0;" onclick="showFamilyByKey(\''+esc(key)+'\')">👁 البطاقة الكاملة</button><button class="btn btn-blue" style="margin:0;background:#7c3aed;" onclick="printFamily(\''+esc(key)+'\')">🖨 طباعة</button>'+(wa?'<a class="btn btn-green" style="margin:0;text-decoration:none;" target="_blank" rel="noopener" href="'+esc(wa)+'">💬 واتساب</a>':'')+'<button class="btn btn-green" style="margin:0;background:#0d9488;" onclick="switchTab(\'quick\');document.getElementById(\'qSearch\').value=\''+esc(digitsOf(fam[2]))+'\';quickFind();">⚡ توزيع</button>';
         }
 
@@ -210,7 +210,7 @@
             const title=prompt('عنوان الكشف:','كشف توزيع مساعدات'); if(title===null) return;
             const w=window.open('','_blank'); if(!w){alert('اسمح بالنوافذ المنبثقة للطباعة.');return;}
             const body=rows.map((f,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(f[1])+'</td><td>'+esc(f[2])+'</td><td>'+esc(f[0])+'</td><td>'+esc(f[26])+'</td><td>'+esc(f[5])+'</td><td></td><td></td></tr>').join('');
-            w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>'+esc(title)+'</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:18px}h1{text-align:center;margin:0;font-size:20px}h2{text-align:center;margin:4px 0 4px;font-size:15px}p{text-align:center;color:#475569;font-size:12px;margin:0 0 12px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #475569;padding:7px;font-size:12px;text-align:right}th{background:#e2e8f0}tr{page-break-inside:avoid}td:last-child{width:110px}td:nth-last-child(2){width:90px}.sig{display:flex;justify-content:space-around;margin-top:40px;font-size:13px}</style></head><body><h1>⛺ مخيم الأصدقاء الجلاء</h1><h2>'+esc(title)+'</h2><p>التاريخ: '+esc(new Date().toLocaleDateString('en-GB'))+' · عدد الأسر: '+rows.length+'</p><table><thead><tr><th>م</th><th>الاسم</th><th>الهوية</th><th>القاطع</th><th>الأفراد</th><th>الجوال</th><th>الكمية/النوع</th><th>التوقيع / البصمة</th></tr></thead><tbody>'+body+'</tbody></table><div class="sig"><div>الموزّع: ................</div><div>المراجع: ................</div><div>المدير: ................</div></div></body></html>');
+            w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>'+esc(title)+'</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:18px}h1{text-align:center;margin:0;font-size:20px}h2{text-align:center;margin:4px 0 4px;font-size:15px}p{text-align:center;color:#475569;font-size:12px;margin:0 0 12px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #475569;padding:7px;font-size:12px;text-align:right}th{background:#e2e8f0}tr{page-break-inside:avoid}td:last-child{width:110px}td:nth-last-child(2){width:90px}.sig{display:flex;justify-content:space-around;margin-top:40px;font-size:13px}</style></head><body><h1>⛺ مخيم جسر الحياة</h1><h2>'+esc(title)+'</h2><p>التاريخ: '+esc(new Date().toLocaleDateString('en-GB'))+' · عدد الأسر: '+rows.length+'</p><table><thead><tr><th>م</th><th>الاسم</th><th>الهوية</th><th>القاطع</th><th>الأفراد</th><th>الجوال</th><th>الكمية/النوع</th><th>التوقيع / البصمة</th></tr></thead><tbody>'+body+'</tbody></table><div class="sig"><div>الموزّع: ................</div><div>المراجع: ................</div><div>المدير: ................</div></div></body></html>');
             w.document.close(); setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
             audit('طباعة كشف توزيع',title+' | '+rows.length+' أسرة');
         }
@@ -327,7 +327,7 @@
                     </style>
                 </head>
                 <body>
-                    <h2>⛺ مخيم الأصدقاء الجلاء</h2>
+                    <h2>⛺ مخيم جسر الحياة</h2>
                     <h3>كشف توزيع ذكي: ${esc(aidType)} (أسر لم تستلم سابقاً)</h3>
                     <p style="text-align:center;">التاريخ: ${new Date().toLocaleDateString('en-GB')}</p>
                     ${tableHTML}
@@ -962,7 +962,7 @@
                 h += '<h4>👤 رب الأسرة المرتبط</h4><table><tbody><tr><td style="width:35%;background:#f1f5f9;font-weight:bold;">الاسم</td><td>' + esc(fam[1]) + '</td></tr><tr><td style="background:#f1f5f9;font-weight:bold;">الهوية / القاطع</td><td>' + esc(fam[2]) + ' / ' + esc(fam[0]) + '</td></tr><tr><td style="background:#f1f5f9;font-weight:bold;">الجوال</td><td>' + esc(fam[5]) + '</td></tr><tr><td style="background:#f1f5f9;font-weight:bold;">أطفال مسجلون حالياً</td><td>' + childrenOf(safeKey(digitsOf(fam[2]))).length + '</td></tr></tbody></table>';
             }
             h += '<p style="font-size:12px;color:#64748b;margin-top:8px;">تاريخ الطلب: ' + esc((item.date || '').split('T')[0] || '-') + '</p>';
-            const wa = fam ? waLink(fam[5], 'السلام عليكم، معك إدارة مخيم الأصدقاء الجلاء بخصوص طلبك: ') : '';
+            const wa = fam ? waLink(fam[5], 'السلام عليكم، معك إدارة مخيم جسر الحياة بخصوص طلبك: ') : '';
             h += '<div class="btnrow"><button class="btn btn-green" onclick="approveAddReq(\'' + dbKey + '\',\'' + esc(reqKey) + '\');closeModal();">✔ قبول</button><button class="btn btn-red" onclick="rejectAddReq(\'' + dbKey + '\',\'' + esc(reqKey) + '\');closeModal();">❌ رفض</button>' + (wa ? '<a class="btn btn-green" style="background:#25d366;" target="_blank" rel="noopener" href="' + esc(wa) + '">💬 واتساب</a>' : '') + '<button class="btn btn-blue" onclick="closeModal()">إغلاق</button></div>';
             openModal(h);
         }
@@ -995,202 +995,59 @@
             loadPendingAddRequests();
         }
 
-        let _secAuth = null, _pwBusy = false, _vaultPriv = null;
-        async function getSecAuth() {
-            if (!_secAuth) { const app = firebase.apps.find(x => x.name === 'sec') || firebase.initializeApp(firebaseConfig, 'sec'); _secAuth = app.auth(); await _secAuth.setPersistence(firebase.auth.Auth.Persistence.NONE); }
-            return _secAuth;
-        }
-        const emailOf = id => safeKey(digitsOf(id)) + '@camp.local';
-        const strongPw = p => p.length >= 8 && /[A-Za-z\u0600-\u06FF]/.test(p) && /\d/.test(p);
-        function genPw() {
-            const L = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ', D = '23456789';
-            const r = n => crypto.getRandomValues(new Uint32Array(1))[0] % n;
-            const a = []; for (let i = 0; i < 5; i++) a.push(L[r(L.length)]); for (let i = 0; i < 3; i++) a.push(D[r(D.length)]);
-            for (let i = a.length - 1; i > 0; i--) { const j = r(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a.join('');
-        }
+        let _pwBusy = false;
         function famByKey(key) { return getDB('db_families').find(f => f && safeKey(digitsOf(f[2])) === key); }
-
-        /* ---- الخزنة المشفّرة (RSA-OAEP): العائلة تشفّر كلمة مرورها بالمفتاح العام، ولا يفكّها إلا ملف المفتاح السري عند المدير ---- */
-        const VAULT_PRE = 'rsa1:', RSA = {name: 'RSA-OAEP', hash: 'SHA-256'};
-        const b64 = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
-        const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-        const vaultReady = () => !!(localDB.config && localDB.config.vaultPub);
-        async function vaultEncrypt(pw) {
-            if (!vaultReady()) throw new Error('no-vault');
-            const k = await crypto.subtle.importKey('jwk', JSON.parse(localDB.config.vaultPub), RSA, false, ['encrypt']);
-            return VAULT_PRE + b64(await crypto.subtle.encrypt({name: 'RSA-OAEP'}, k, new TextEncoder().encode(pw)));
-        }
-        async function vaultDecrypt(val) {
-            if (!val) return null; val = String(val);
-            if (!val.startsWith(VAULT_PRE)) return val; // قيمة قديمة غير مشفرة
-            if (!_vaultPriv) throw new Error('locked');
-            return new TextDecoder().decode(await crypto.subtle.decrypt({name: 'RSA-OAEP'}, _vaultPriv, unb64(val.slice(VAULT_PRE.length))));
-        }
-        async function vaultMigrate() {
-            const v = localDB.pwvault || {}, upd = {}; let n = 0;
-            for (const k in v) { if (typeof v[k] === 'string' && !v[k].startsWith(VAULT_PRE)) { upd['pwvault/' + k] = await vaultEncrypt(v[k]); n++; } }
-            if (n) await rdb.ref().update(upd);
-            return n;
-        }
-        async function vaultSetup() {
-            if (isLimited) return;
-            if (!window.crypto || !crypto.subtle) { alert('المتصفح لا يدعم التشفير. افتح الصفحة عبر https.'); return; }
-            if (vaultReady()) { alert('الخزنة المشفرة مفعّلة مسبقاً. استخدم «تحميل المفتاح السري». إنشاء مفتاح جديد سيجعل كلمات المرور المشفرة الحالية غير قابلة للقراءة.'); return; }
-            if (!confirm('سيتم الآن:\n1) إنشاء مفتاح تشفير وتنزيل ملف المفتاح السري على جهازك.\n2) تشفير كل كلمات المرور المخزنة حالياً بشكل نص صريح.\n\nاحفظ ملف المفتاح في مكان آمن (نسخة على فلاشة مثلاً). إذا ضاع الملف لن تستطيع عرض أو إعادة تعيين كلمات المرور (يبقى دخول العائلات طبيعياً).\n\nمتابعة؟')) return;
-            try {
-                const kp = await crypto.subtle.generateKey({name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256'}, true, ['encrypt', 'decrypt']);
-                const priv = await crypto.subtle.exportKey('jwk', kp.privateKey), pub = JSON.stringify(await crypto.subtle.exportKey('jwk', kp.publicKey));
-                downloadJSON(priv, 'مفتاح_الخزنة_السري_aljalacamp');
-                await rdb.ref('config/vaultPub').set(pub);
-                localDB.config = Object.assign({}, localDB.config, {vaultPub: pub});
-                _vaultPriv = await crypto.subtle.importKey('jwk', priv, RSA, false, ['decrypt']);
-                const n = await vaultMigrate();
-                audit('تفعيل الخزنة المشفرة', 'تم ترحيل ' + n + ' كلمة مرور');
-                schedulePublish(); loadPasswordsTable();
-                toast('✅ تم تفعيل الخزنة المشفرة.\nتم تشفير ' + n + ' كلمة مرور.\nتأكد من حفظ ملف المفتاح الذي نُزّل الآن.');
-            } catch (err) { alert('❌ تعذر التفعيل: ' + (err.message || err)); }
-        }
-        async function vaultLoadKey(ev) {
-            const f = ev.target.files[0]; if (!f) return;
-            try {
-                const jwk = JSON.parse(await f.text());
-                const k = await crypto.subtle.importKey('jwk', jwk, RSA, false, ['decrypt']);
-                if (vaultReady()) { // تحقق أن المفتاح يطابق المفتاح العام
-                    const test = await vaultEncrypt('test1234');
-                    const back = new TextDecoder().decode(await crypto.subtle.decrypt({name: 'RSA-OAEP'}, k, unb64(test.slice(VAULT_PRE.length))));
-                    if (back !== 'test1234') throw new Error('mismatch');
-                }
-                _vaultPriv = k; audit('تحميل مفتاح الخزنة', ''); loadPasswordsTable(); toast('✅ تم تحميل المفتاح (يبقى في الذاكرة حتى إغلاق الصفحة).');
-            } catch (e) { alert('❌ ملف المفتاح غير صحيح أو لا يطابق الخزنة.'); }
-            ev.target.value = '';
-        }
-        async function revealPw(key, el) {
-            try {
-                const p = await vaultDecrypt((localDB.pwvault || {})[key]);
-                if (p == null) { alert('لا توجد كلمة مرور محفوظة لهذه الأسرة.'); return; }
-                el.textContent = p; audit('عرض كلمة مرور', key);
-                setTimeout(() => { el.textContent = '🔓 إظهار'; }, 10000);
-            } catch (e) {
-                if (e && e.message === 'locked') alert('🔒 حمّل ملف المفتاح السري أولاً (زر «تحميل المفتاح السري»).');
-                else toast('⚠️ المفتاح السري محمّل، لكن كلمة مرور هذه الأسرة مشفّرة بمفتاح مختلف (قديم) فلا يمكن قراءتها.\n\nالحل: اضغط «🔑 تفعيل كلمة المرور» لإدخال كلمة مرور جديدة، أو «♻️ إعادة تفعيل الحساب».');
-            }
-        }
-        function renderVaultPanel() {
-            const v = localDB.pwvault || {}, vals = Object.values(v);
-            const legacy = vals.filter(x => typeof x === 'string' && !x.startsWith(VAULT_PRE)).length;
-            let h = '<h2 class="card-title">🔐 الخزنة المشفرة</h2>';
-            if (!vaultReady()) {
-                h += '<p class="warn">⚠️ الخزنة غير مفعّلة: كلمات المرور تُحفظ حالياً كنص صريح في قاعدة البيانات' + (legacy ? ' (' + legacy + ' كلمة مرور)' : '') + '. فعّلها الآن لتشفيرها.</p><button class="btn btn-green" onclick="vaultSetup()">🔐 تفعيل الخزنة المشفرة</button>';
-            } else {
-                h += '<p>الحالة: <strong style="color:#047857;">مفعّلة ✅</strong> · المفتاح السري: ' + (_vaultPriv ? '<strong style="color:#047857;">محمّل</strong>' : '<strong class="warn">غير محمّل</strong>') + (legacy ? ' · <span class="warn">كلمات مرور غير مشفرة: ' + legacy + '</span>' : '') + '</p>';
-                h += '<div class="btn-group-tools"><label class="btn btn-blue" style="margin:0;cursor:pointer;">📂 تحميل المفتاح السري<input type="file" accept=".json,application/json" style="display:none;" onchange="vaultLoadKey(event)"></label>';
-                if (legacy) h += '<button class="btn btn-red" style="margin:0;" onclick="vaultMigrate().then(n=>{audit(\'ترحيل كلمات مرور\',n);alert(\'تم تشفير \'+n);})">ترحيل القديم الآن</button>';
-                h += '</div>';
-            }
-            document.getElementById('vaultPanel').innerHTML = h;
-        }
-
-        /* ====== إدارة حسابات العائلات (للمدير فقط) ====== */
         function claimUidOf(key) {
             const c = localDB.claims || {};
             return Object.keys(c).find(u => c[u] && safeKey(String(c[u].id)) === key) || null;
         }
-        async function readStoredPw(key, fam) {
-            const vault = localDB.pwvault || {}, stored = vault[key] || vault[safeKey(fam[2])];
-            if (!stored) return {pw: null, reason: 'none'};
-            try { return {pw: await vaultDecrypt(stored), reason: 'ok'}; }
-            catch (e) { return {pw: null, reason: (e && e.message === 'locked') ? 'locked' : 'unreadable'}; }
-        }
-        const CONSOLE_HELP = 'الحساب موجود في Firebase لكن كلمة مروره غير معروفة.\n\nالحل اليدوي (مرة واحدة):\nFirebase Console ← Authentication ← Users ← ابحث عن هذا البريد واحذفه:\n';
-        async function saveClaimAndVault(key, uid, pw) {
-            if (!claimUidOf(key) || claimUidOf(key) !== uid) {
-                await rdb.ref('claims/' + uid).set({id: key, k1: 'admin', v1: 'admin', k2: 'admin2', v2: 'admin2'});
-                localDB.claims = Object.assign({}, localDB.claims, {[uid]: {id: key}});
+        async function familyAccountAction(key, action, button) {
+            if (isLimited || _pwBusy || !auth.currentUser || !famByKey(key)) return;
+            if (!window.CAMP_RECOVERY_URL) {
+                alert('خدمة حسابات العائلات لسه مش مربوطة.');
+                return;
             }
-            let saved = false;
-            try { await rdb.ref('pwvault/' + key).set(await vaultEncrypt(pw)); localDB.pwvault = Object.assign({}, localDB.pwvault, {[key]: 'x'}); saved = true; } catch (e) {}
-            return saved;
-        }
-
-        /* 🔑 تفعيل كلمة المرور: ينشئ الحساب إن لم يوجد، أو يغيّر كلمة مروره، أو يربط حساباً عالقاً */
-        async function adminSetPw(key) {
-            if (isLimited) { alert('⛔ للمدير فقط.'); return; }
-            if (_pwBusy) return; const fam = famByKey(key); if (!fam) return;
-            let pw = prompt('تفعيل كلمة المرور لـ: ' + fam[1] + '\n\nكلمة المرور الجديدة (مولّدة تلقائياً):', genPw());
-            if (pw === null) return; pw = pw.trim();
-            if (!strongPw(pw)) { alert('كلمة المرور يجب أن تكون 8 أحرف على الأقل وتحتوي حروفاً وأرقاماً.'); return; }
-            _pwBusy = true; let created = null;
-            try {
-                const sa = await getSecAuth(); let user;
-                try {
-                    const cred = await sa.createUserWithEmailAndPassword(emailOf(key), pw);
-                    user = cred.user; created = user;
-                } catch (err) {
-                    if (err.code !== 'auth/email-already-in-use') throw err;
-                    // الحساب موجود مسبقاً: نحتاج كلمة مروره الحالية
-                    let cur = (await readStoredPw(key, fam)).pw;
-                    const tryIn = async p => (await sa.signInWithEmailAndPassword(emailOf(key), p)).user;
-                    try { if (!cur) throw {code: 'none'}; user = await tryIn(cur); }
-                    catch (e1) {
-                        const typed = prompt('الحساب موجود مسبقاً ولا يمكن قراءة كلمة مروره الحالية من الخزنة.\n\nإن كنت تعرف كلمة المرور الحالية للعائلة أدخلها هنا، وإلا اضغط إلغاء ثم استخدم «♻️ إعادة تفعيل الحساب»:');
-                        if (!typed) return;
-                        try { user = await tryIn(typed.trim()); } catch (e2) { alert('❌ كلمة المرور الحالية غير صحيحة.\n\nاستخدم «♻️ إعادة تفعيل الحساب».'); return; }
-                    }
-                    await user.updatePassword(pw);
-                }
-                const saved = await saveClaimAndVault(key, user.uid, pw); created = null;
-                audit('تفعيل كلمة مرور عائلة', fam[1]);
-                toast('✅ تم تفعيل الحساب\nكلمة المرور: ' + pw + '\n\nسلّمها للعائلة الآن' + (saved ? '' : ' (لم تُحفظ في الخزنة)') + '.');
-            } catch (err) {
-                if (created) { try { await created.delete(); } catch (e) {} } // تراجع كي لا يبقى حساب عالق
-                alert('❌ تعذر التفعيل: ' + (err.code || err.message));
-            }
-            finally { try { await (await getSecAuth()).signOut(); } catch (e) {} _pwBusy = false; loadPasswordsTable(); }
-        }
-
-        /* ♻️ إعادة تفعيل الحساب: يحذف حساب الدخول القديم + الربط + الخزنة، لتفعّل العائلة نفسها من جديد */
-        async function adminReactivate(key) {
-            if (isLimited) { alert('⛔ للمدير فقط.'); return; }
-            if (_pwBusy) return; const fam = famByKey(key); if (!fam) return;
-            if (!confirm('إعادة تفعيل حساب: ' + fam[1] + '\n\nسيتم حذف حساب الدخول القديم وكلمة مروره، وبعدها تستطيع العائلة التفعيل بنفسها من «أول مرة» (أو تعيّن لها كلمة مرور بزر 🔑).\n\nمتابعة؟')) return;
+            if (action === 'reset-link' && !confirm('هل تحققت من هوية العائلة قبل إصدار رابط إعادة التعيين؟')) return;
             _pwBusy = true;
             try {
-                const sa = await getSecAuth(), email = emailOf(key);
-                let cur = (await readStoredPw(key, fam)).pw, gone = false;
-                if (!cur) cur = (prompt('إن كنت تعرف كلمة المرور الحالية للحساب أدخلها (اختياري، اتركها فارغة إن لم تعرفها):') || '').trim();
-                if (cur) {
-                    try { const c = await sa.signInWithEmailAndPassword(email, cur); await c.user.delete(); gone = true; }
-                    catch (e) { if (e.code === 'auth/user-not-found') gone = true; else { alert('❌ تعذر حذف الحساب (كلمة المرور غير صحيحة).\n\n' + CONSOLE_HELP + email); return; } }
+                const token = await auth.currentUser.getIdToken();
+                const endpoint = new URL('/api/admin/' + action, window.CAMP_RECOVERY_URL);
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + token},
+                    body: JSON.stringify({id: key})
+                });
+                const result = await response.json();
+                if (response.status === 401) {
+                    alert('سجّل خروج وادخل مرة ثانية لتأكيد هويتك، وبعدها جرّب من جديد.');
+                } else if (response.status === 404) {
+                    alert(action === 'reveal' ? 'كلمة السر غير متاحة. استخدم إعادة التعيين.' : 'ما في حساب دخول فعّال مربوط بهالعائلة.');
+                } else if (response.ok && action === 'reveal') {
+                    button.textContent = result.password;
+                    setTimeout(() => { button.textContent = 'إظهار'; }, 10000);
+                } else if (response.ok && action === 'reset-link') {
+                    prompt('انسخ الرابط وسلّمه للعائلة مباشرة بعد التحقق من هويتها:', result.link);
                 } else {
-                    try { const c = await sa.createUserWithEmailAndPassword(email, genPw() + 'x1'); await c.user.delete(); gone = true; } // لم يكن موجوداً أصلاً
-                    catch (e) { if (e.code === 'auth/email-already-in-use') { alert(CONSOLE_HELP + email + '\n\nثم اضغط «♻️ إعادة تفعيل الحساب» مرة أخرى.'); return; } throw e; }
+                    alert('تعذّر إكمال الطلب. تأكّد من صلاحياتك وحاول مرة ثانية.');
                 }
-                if (gone) {
-                    const uid = claimUidOf(key), upd = {}; upd['pwvault/' + key] = null; if (uid) upd['claims/' + uid] = null;
-                    await rdb.ref().update(upd);
-                    if (uid && localDB.claims) delete localDB.claims[uid]; if (localDB.pwvault) delete localDB.pwvault[key];
-                    audit('إعادة تفعيل حساب عائلة', fam[1]);
-                    toast('✅ تمت إعادة التفعيل.\nيمكن للعائلة الآن التفعيل من صفحة «أول مرة»، أو اضغط «🔑 تفعيل كلمة المرور» لتعيين كلمة مرور لها.');
-                }
-            } catch (err) { alert('❌ تعذرت إعادة التفعيل: ' + (err.code || err.message)); }
-            finally { try { await (await getSecAuth()).signOut(); } catch (e) {} _pwBusy = false; loadPasswordsTable(); }
+            } catch {
+                alert('تعذّر الاتصال بخدمة حسابات العائلات.');
+            } finally {
+                _pwBusy = false;
+            }
         }
 
         function loadPasswordsTable() {
-            renderVaultPanel();
-            const vault = localDB.pwvault || {}, tbody = document.querySelector('#passwordsTable tbody');
+            const tbody = document.querySelector('#passwordsTable tbody');
             const q = (document.getElementById('pwSearch').value || '').trim().toLowerCase(); tbody.innerHTML = ''; let n = 0; const prow = [];
             const claimed = new Set(Object.values(localDB.claims || {}).map(c => c && safeKey(String(c.id))));
             getDB('db_families').forEach(fam => {
                 if (!fam || (q && !(String(fam[1]).toLowerCase().includes(q) || String(fam[2]).includes(q)))) return;
-                const cleanKey = safeKey(digitsOf(fam[2])), pw = vault[cleanKey] || vault[safeKey(fam[2])]; n++;
-                const active = !!pw || claimed.has(cleanKey);
-                let pwCell = '—';
-                if (pw) pwCell = String(pw).startsWith(VAULT_PRE)
-                    ? '<button class="btn btn-blue" style="margin:0;padding:3px 8px;font-size:11px;" onclick="revealPw(\'' + esc(cleanKey) + '\',this)">🔓 إظهار</button>'
-                    : '<span class="warn">⚠️ غير مشفرة</span>';
-                const bs = 'margin:0 2px;padding:4px 8px;font-size:11px;';
-                const btns = cleanKey ? '<button class="btn btn-green" style="' + bs + '" onclick="adminSetPw(\'' + esc(cleanKey) + '\')">🔑 تفعيل كلمة المرور</button><button class="btn btn-blue" style="' + bs + '" onclick="adminReactivate(\'' + esc(cleanKey) + '\')">♻️ إعادة تفعيل الحساب</button>' : '';
+                const cleanKey = safeKey(digitsOf(fam[2]));
+                n++;
+                const active = claimed.has(cleanKey);
+                const pwCell = active ? '<button class="btn btn-blue" onclick="familyAccountAction(\'' + esc(cleanKey) + '\',\'reveal\',this)">إظهار</button>' : '—';
+                const btns = active ? '<button class="btn btn-blue" onclick="familyAccountAction(\'' + esc(cleanKey) + '\',\'reset-link\')">إعادة تعيين كلمة السر</button>' : '';
                 prow.push('<tr><td>' + n + '</td><td>' + esc(fam[2]) + '</td><td><strong>' + esc(fam[1]) + '</strong></td><td style="direction:ltr;font-weight:bold;">' + pwCell + '</td><td style="color:' + (active ? '#10b981' : '#64748b') + ';font-weight:bold;">' + (active ? '✅ مفعّل' : 'لم يفعّل') + '</td><td style="white-space:nowrap;">' + btns + '</td></tr>');
             });
             tbody.innerHTML = prow.join('');
@@ -1217,7 +1074,7 @@
             if (!real.length) h += '<p class="warn">لا توجد تغييرات فعلية في هذا الطلب.</p>';
             else h += '<table><thead><tr><th>الحقل</th><th>القيمة الحالية</th><th>القيمة المطلوبة</th></tr></thead><tbody>' + real.map(d => '<tr class="chg"><td><strong>' + esc(FAM_LABELS[d.i]) + '</strong></td><td class="old">' + esc(d.a || '—') + '</td><td class="new">' + esc(d.b || '—') + '</td></tr>').join('') + '</tbody></table>';
             if (locked.length) h += '<p class="warn" style="margin-top:8px;">🔒 تم تجاهل محاولة تغيير حقول مقفلة: ' + locked.map(d => esc(FAM_LABELS[d.i])).join('، ') + '</p>';
-            const wa = waLink(fam[5], 'السلام عليكم ' + fam[1] + '، معك إدارة مخيم الأصدقاء الجلاء بخصوص طلب تعديل بياناتك: ');
+            const wa = waLink(fam[5], 'السلام عليكم ' + fam[1] + '، معك إدارة مخيم جسر الحياة بخصوص طلب تعديل بياناتك: ');
             h += '<div class="btnrow"><button class="btn btn-green" onclick="approveRequest(' + index + ');closeModal();">✔ موافقة</button><button class="btn btn-red" onclick="rejectRequest(' + index + ');closeModal();">❌ رفض</button>' + (wa ? '<a class="btn btn-green" style="background:#25d366;" target="_blank" rel="noopener" href="' + esc(wa) + '">💬 واتساب</a>' : '') + '<button class="btn btn-blue" onclick="showFamilyByKey(\'' + esc(safeKey(digitsOf(fam[2]))) + '\')">👁 بطاقة الأسرة</button><button class="btn btn-blue" style="background:#64748b;" onclick="closeModal()">إغلاق</button></div>';
             openModal(h);
         }
@@ -2808,7 +2665,7 @@ async function chExecute() {
         localDB.db_families = fams; localDB.db_aids = aids; localDB.db_children = kids; localDB.db_edit_requests = reqs;
         audit('استبدال رب الأسرة بالزوجة', sel.length + ' أسرة | مساعدات منقولة: ' + sel.reduce((n, p) => n + p.aids.length, 0));
         schedulePublish(); closeModal(); refreshNow();
-        alert('✅ تم استبدال رب الأسرة في ' + sel.length + ' أسرة ونقل مساعداتها.\n\nتنبيه: حسابات البوابة القديمة (بهوية الزوج) أُلغيت. لتفعيل الحساب الجديد: إما أن تفعّله الأسرة ذاتياً بهوية الزوجة، أو تعيّن لها كلمة مرور من «كشف كلمات المرور».');
+        alert('✅ تم استبدال رب الأسرة في ' + sel.length + ' أسرة ونقل مساعداتها.\n\nتنبيه: حسابات البوابة القديمة (بهوية الزوج) أُلغيت. لتفعيل الحساب الجديد: بتقدر الأسرة تفعّل الحساب الجديد بهوية رب الأسرة الجديدة من بوابة العائلات.');
     }).catch(e => { if (b) b.classList.remove('is-loading'); alert('❌ لم يتم أي تغيير بسبب خطأ: ' + (e && e.message ? e.message : e)); });
 }
 async function chExecuteOrphans() {
@@ -3286,7 +3143,7 @@ function repPrint() {
     const R = repRun(), h = repHTML(R, true), w = window.open('', '_blank'); if (!w) { toast('اسمح بالنوافذ المنبثقة للطباعة', 'warn'); return; }
     const by = (auth.currentUser && auth.currentUser.email || '').split('@')[0];
     w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>' + esc(R.title) + '</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;font-size:12px;margin:0}.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:12px}.top h1{margin:0;font-size:20px}.top p{margin:2px 0 0;color:#444}.camp{font-weight:700;font-size:14px}.tiles{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.tile{flex:1;min-width:120px;border:1px solid #999;border-radius:8px;padding:8px 10px}.tile small{display:block;color:#555}.tile b{font-size:17px}.note{background:#fff4d6;border:1px solid #e0b84c;padding:6px 10px;border-radius:6px;margin:8px 0}h3{margin:16px 0 6px;font-size:14px;border-right:4px solid #111;padding-right:8px}table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{border:1px solid #888;padding:4px 6px;text-align:right}th{background:#e8e8e8}tr{page-break-inside:avoid}tbody tr:nth-child(even){background:#f6f6f6}.sign{display:flex;justify-content:space-between;margin-top:36px}.sign div{width:30%;text-align:center;border-top:1px solid #111;padding-top:4px}.dr-n{display:none}.rbar{display:none}</style></head><body>'
-        + '<div class="top"><div><div class="camp">⛺ مخيم الأصدقاء الجلاء</div><h1>' + esc(R.title) + '</h1><p>' + esc(R.sub) + '</p></div><div style="text-align:left;color:#444">تاريخ الإصدار: ' + esc(new Date().toLocaleDateString('en-GB')) + '<br>أعدّه: ' + esc(by) + '</div></div>'
+        + '<div class="top"><div><div class="camp">⛺ مخيم جسر الحياة</div><h1>' + esc(R.title) + '</h1><p>' + esc(R.sub) + '</p></div><div style="text-align:left;color:#444">تاريخ الإصدار: ' + esc(new Date().toLocaleDateString('en-GB')) + '<br>أعدّه: ' + esc(by) + '</div></div>'
         + '<div class="tiles">' + R.tiles.map(t => '<div class="tile"><small>' + esc(t.l) + '</small><b>' + esc(t.v) + '</b></div>').join('') + '</div>' + R.notes.map(n => '<div class="note">' + esc(n) + '</div>').join('')
         + h.secs.replace(/<div class="card">/g, '<div>').replace(/<h3 class="card-title">/g, '<h3>').replace(/<div class="table-responsive">/g, '<div>')
         + '<div class="sign"><div>إعداد</div><div>مراجعة</div><div>اعتماد</div></div></body></html>');

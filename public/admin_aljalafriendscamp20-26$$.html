@@ -25,7 +25,7 @@
     <div id="loginOverlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999;">
         <form id="adminLoginForm">
             <h2>⛺ دخول الإدارة</h2>
-            <p class="login-sub">نظام مخيم الأصدقاء الجلاء الموحد</p>
+            <p class="login-sub">نظام مخيم جسر الحياة الموحد</p>
             <div class="input-group"><label for="admEmail">البريد الإلكتروني</label><input type="email" id="admEmail" required autocomplete="username" style="direction:ltr"></div>
             <div class="input-group"><label for="admPass">كلمة المرور</label><div class="pw-wrap"><input type="password" id="admPass" required autocomplete="current-password"><button type="button" id="admPassToggle">إظهار</button></div></div>
             <div id="loginError" role="alert"></div>
@@ -36,7 +36,7 @@
     <div class="admin-layout">
         <div id="menuOverlay" onclick="toggleMenu(false)"></div>
         <aside class="sidebar">
-            <h2>مخيم الأصدقاء الجلاء</h2>
+            <h2>مخيم جسر الحياة</h2>
             <div id="whoami"></div>
             <ul id="sidebarMenu">
                 <li id="nav-dashboard" onclick="switchTab('dashboard')" style="background-color:#7c3aed;font-weight:bold;">📊 لوحة المؤشرات</li>
@@ -45,7 +45,7 @@
                 <li id="nav-requests" onclick="switchTab('requests')" style="background-color: #475569;">🔔 طلبات وشكاوى <span id="reqBadge" class="badge" style="display:none;">0</span></li>
                 <li id="nav-ann" onclick="switchTab('ann')" style="background-color:#b45309;">📢 إعلانات للعائلات</li>
                 <li id="nav-quality" onclick="switchTab('quality')" style="background-color:#334155;">🧪 فحص جودة البيانات</li>
-                <li id="nav-passwords" onclick="switchTab('passwords')" style="background-color: #0f172a; color: #38bdf8;">🔑 كشف كلمات المرور</li>
+                <li id="nav-passwords" onclick="switchTab('passwords')" style="background-color: #0f172a; color: #38bdf8;">🔑 إدارة حسابات العائلات</li>
                 <li id="nav-families" class="active" onclick="switchTab('families')">👥 قاعدة الأسر</li>
                 <li id="nav-aids" onclick="switchTab('aids')">📦 كشف الاستلام</li>
                 <li id="nav-injured" onclick="switchTab('injured')">🩹 كشف المصابين</li>
@@ -209,10 +209,9 @@
                 </div>
             </div>
 
-            <!-- 0.1 كشف كلمات المرور -->
+            <!-- 0.1 إدارة حسابات العائلات -->
             <div id="passwords-tab" class="tab-content">
                 <div class="header"><h1>🔑 حسابات العائلات وكلمات المرور</h1></div>
-                <div class="card" id="vaultPanel" style="border-top-color:#f59e0b;"></div>
                 <div class="card">
                     <h2 class="card-title">قائمة كلمات المرور المسجلة للبوابة</h2>
                     <input type="text" id="pwSearch" oninput="loadPasswordsTable()" placeholder="بحث بالاسم أو رقم الهوية..." style="width:100%;margin-bottom:10px;padding:10px;border:2px solid #38bdf8;">
@@ -563,6 +562,7 @@
     <div id="modalBg" class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBox"></div></div>
 
     <script defer src="/assets/startup-r3.js"></script>
-    <script defer src="/assets/admin-r3.js?v=sync-fix-20261122"></script>
+    <script defer src="/assets/camp-recovery-config.js"></script>
+    <script defer src="/assets/admin-r3.js?v=jesr-family-accounts-20261125"></script>
 </body>
 </html>
