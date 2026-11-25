@@ -1,4 +1,4 @@
-        firebase.initializeApp({apiKey:"AIzaSyBFo63U4rpdr7ZYUMdhxIzVIyMSRNv4GVc",authDomain:"aljalacamp-test.firebaseapp.com",databaseURL:"https://aljalacamp-test-default-rtdb.firebaseio.com",projectId:"aljalacamp-test",storageBucket:"aljalacamp-test.firebasestorage.app",messagingSenderId:"1024191676814",appId:"1:1024191676814:web:7e0637d1e6acede51f64df"});
+        firebase.initializeApp({apiKey:"AIzaSyCZdQeLOQu8LPp26eaFtoszSWOJHrgxLrw",authDomain:"alhayacamp-a31eb.firebaseapp.com",databaseURL:"https://alhayacamp-a31eb-default-rtdb.firebaseio.com",projectId:"alhayacamp-a31eb",storageBucket:"alhayacamp-a31eb.firebasestorage.app",messagingSenderId:"729970326565",appId:"1:729970326565:web:9bf09186c7a5ab47376d3cc"});
         const auth=firebase.auth(), rdb=firebase.database();
         const authReady = prepareCampAuth(auth);
         authReady.catch(() => showCampStartupError());
