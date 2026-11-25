@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "alhayacamp-a31eb"
+  },
+  "targets": {
+    "alhayacamp-a31eb": {
+      "hosting": {
+        "jesr-public": [
+          "alhayacamp"
+        ]
+      }
+    }
   }
 }
