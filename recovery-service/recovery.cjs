@@ -44,7 +44,7 @@ function readSession(token, now = Date.now()) {
 }
 
 function matches(row, answers, identity) {
-  const spouses = [digits(row?.[8]), digits(row?.[11])].filter(id => /^\d{9}$/.test(id));
+  const spouses = [digits(row?.[9]), digits(row?.[12])].filter(id => /^\d{9}$/.test(id));
   const suffix = phoneSuffix(row);
   const members = Number(digits(row?.[26]));
   return spouses.includes(digits(answers.spouse)) && members > 0

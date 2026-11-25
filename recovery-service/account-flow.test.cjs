@@ -10,7 +10,10 @@ test('family activation, reveal, reset and password change keep the same linked 
   const row = [];
   row[2] = id;
   row[5] = '0591234567';
-  row[8] = '987654321';
+  row[8] = 'اسم تجريبي';
+  row[9] = '987654321';
+  row[11] = 'اسم تجريبي ثاني';
+  row[12] = '999888777';
   row[26] = '4';
   const records = new Map([['db_families', [row]], ['portal/' + id, {id}], ['admins/admin', 'super_admin']]);
   const users = new Map();
@@ -110,7 +113,7 @@ test('family activation, reveal, reset and password change keep the same linked 
     const answers = {session, spouse:'987654321', members:'4'};
     assert.equal((await post('verify', answers)).body.state, 'verified');
     const secondSession = (await post('start', {id, phone:'1234567'})).body.session;
-    assert.equal((await post('verify', {...answers, session:secondSession})).body.state, 'busy');
+    assert.equal((await post('verify', {...answers, session:secondSession, spouse:'999888777'})).body.state, 'busy');
     assert.equal((await post('password', {session:secondSession, password:'Unauthorized synthetic 1'})).status, 409);
     assert.equal((await post('password', {session, password:'First synthetic 1'})).body.state, 'completed');
     assert.equal((await post('admin/reveal', {id}, 'family-token')).status, 403);
