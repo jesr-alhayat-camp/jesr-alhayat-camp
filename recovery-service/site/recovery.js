@@ -49,10 +49,12 @@ function submit(id, action) {
   });
 }
 
-function showState(state) {
+function showState(state, retryAfterSeconds) {
+  const minutes = Math.max(1, Math.ceil((retryAfterSeconds || 1800) / 60));
   switch (state) {
     case 'verified': view('password', 'الإجابات مطابقة. أنشئ كلمة المرور.'); break;
-    case 'locked': view(null, 'التحقّق متوقف مؤقتًا. جرّب بعد 30 دقيقة، أو تواصل مع الإدارة.'); break;
+    case 'locked': view(null, 'وصلت لحدّ المحاولات. جرّب بعد حوالي ' + minutes + ' دقيقة.'); break;
+    case 'busy': view('questions', 'في جلسة تفعيل مفتوحة. كمّل من التبويب الأول أو جرّب بعد حوالي ' + minutes + ' دقيقة.'); break;
     case 'processing': view(null, 'جارٍ إنشاء الحساب. حدّث الصفحة للتحقّق من الحالة.'); break;
     case 'existing': view(null, 'الحساب موجود. سجّل الدخول أو تواصل مع الإدارة إذا نسيت كلمة المرور.'); break;
     case 'contact': view(null, 'تعذّر تفعيل حساب الأسرة. تواصل مع الإدارة.'); break;
@@ -78,23 +80,23 @@ submit('questions', async () => {
     phone:element('phone').value
   });
   if (result.state === 'incorrect') {
-    view('questions', 'الإجابات غير مطابقة. عدد المحاولات المتبقية: ' + result.remaining);
-  } else if (result.state === 'locked') {
-    view(null, 'التحقّق متوقف مؤقتًا. جرّب بعد 30 دقيقة، أو تواصل مع الإدارة.');
+    const remaining = result.remaining == null ? '' : ' عدد المحاولات المتبقية: ' + result.remaining;
+    view('questions', 'الإجابات غير مطابقة.' + remaining);
   } else {
     element('questions').reset();
-    showState(result.state);
+    showState(result.state, result.retryAfterSeconds);
   }
 });
 submit('password', async () => {
   const password = element('newPassword').value;
   const result = resetCode ? await api('complete-reset', {code:resetCode, password}) : await api('password', {password});
   element('password').reset();
-  showState(result.state);
+  showState(result.state, result.retryAfterSeconds);
 });
 async function refresh() {
   try {
-    showState((await api('status')).state);
+    const result = await api('status');
+    showState(result.state, result.retryAfterSeconds);
   } catch {
     view('identity', 'تعذّر استرجاع الجلسة. أدخل هويتك من جديد.');
   }

@@ -232,13 +232,20 @@ const server = http.createServer(async (req, res) => {
       }
       const result = await ref.transaction(current => transition(current, identity, outcome, Date.now()));
       const record = result.snapshot.val();
-      if (record?.owner === identity.owner && record.until > Date.now()) {
-        return send(res, 200, {state:record.state});
+      if (record?.state === 'attempts') {
+        if (record.failures >= 3) {
+          const retryAfterSeconds = Math.max(1, Math.ceil((record.until - Date.now()) / 1000));
+          return send(res, 200, {state:'locked', retryAfterSeconds});
+        }
+        return send(res, 200, {state:'incorrect', remaining:3 - record.failures});
       }
-      if (record?.state !== 'attempts' || record.failures >= 3) {
-        return send(res, 200, {state:'locked'});
+      if (record?.owner === identity.owner) return send(res, 200, {state:record.state});
+      if (outcome === 'existing' || outcome === 'contact') return send(res, 200, {state:outcome});
+      if (outcome === 'verified') {
+        const retryAfterSeconds = Math.max(1, Math.ceil((record.until - Date.now()) / 1000));
+        return send(res, 200, {state:'busy', retryAfterSeconds});
       }
-      return send(res, 200, {state:'incorrect', remaining:3 - record.failures});
+      return send(res, 200, {state:'incorrect'});
     }
 
     if (name === '/api/status') {
@@ -246,7 +253,8 @@ const server = http.createServer(async (req, res) => {
       const current = record?.until > Date.now();
       const locked = current && record.state === 'attempts' && record.failures >= 3;
       const state = locked ? 'locked' : current && record.owner === identity.owner ? record.state : 'questions';
-      return send(res, 200, {state});
+      const retryAfterSeconds = locked ? Math.max(1, Math.ceil((record.until - Date.now()) / 1000)) : undefined;
+      return send(res, 200, {state, retryAfterSeconds});
     }
 
     const password = body.password;
