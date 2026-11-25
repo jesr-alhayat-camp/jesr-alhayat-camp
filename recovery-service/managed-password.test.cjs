@@ -9,7 +9,7 @@ function setup() {
       const next = update(record);
       if (next === undefined) return {committed:false};
       record = next;
-      return {committed:true};
+      return {committed:true, snapshot:{val:() => next}};
     }
   };
   const store = {encrypt: (uid, password) => ({ciphertext: uid + ':' + password.length})};

@@ -31,7 +31,10 @@ function submit(id, action) {
     try {
       await action();
     } catch (error) {
-      if (error.message === 'session') {
+      if (error.message === 'authorization' && !resetCode) {
+        await refresh();
+        if (!element('questions').hidden) statusBox.textContent = 'انتهت مهلة إنشاء كلمة المرور. جاوب على السؤالين من جديد.';
+      } else if (error.message === 'session') {
         sessionStorage.removeItem(sessionKey);
         session = null;
         view('identity', 'انتهت جلسة التحقّق. أدخل هويتك من جديد.');

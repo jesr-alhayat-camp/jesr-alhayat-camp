@@ -1,4 +1,5 @@
 const { randomUUID } = require('node:crypto');
+const { updateExisting } = require('./update-existing.cjs');
 
 async function changeManagedPassword(ref, store, uid, password, updateAccount) {
   const encrypted = store.encrypt(uid, password);
@@ -15,16 +16,16 @@ async function changeManagedPassword(ref, store, uid, password, updateAccount) {
   try {
     result = await updateAccount();
   } catch (error) {
-    await ref.transaction(current => {
+    await updateExisting(ref, current => {
       if (current?.state === 'pending' && current.owner === owner) return {state:'unavailable'};
     });
     throw error;
   }
 
-  const confirmed = await ref.transaction(current => {
+  const confirmed = await updateExisting(ref, current => {
     if (current?.state === 'pending' && current.owner === owner) return {state:'ready', encrypted};
   });
-  if (!confirmed.committed) {
+  if (!confirmed) {
     throw Object.assign(new Error('Password storage state changed during the update.'), {code:'storage-conflict'});
   }
   return result;

@@ -13,6 +13,7 @@ if (Buffer.byteLength(process.env.CAMP_RECOVERY_SECRET || '') < 32) {
 const { issueFamilyResetLink, linkedFamily, requireRecentAdmin } = require('./family-reset.cjs');
 const { createPasswordStore } = require('./password-store.cjs');
 const { changeManagedPassword } = require('./managed-password.cjs');
+const { updateExisting } = require('./update-existing.cjs');
 const project = process.env.CAMP_FIREBASE_PROJECT || 'aljalacamp-test';
 if (!['aljalacamp-test', 'alhayacamp-a31eb'].includes(project)) {
   throw new Error('Unsupported CAMP_FIREBASE_PROJECT.');
@@ -284,12 +285,12 @@ const server = http.createServer(async (req, res) => {
         || !/[A-Za-z\u0600-\u06ff]/.test(password) || !/\d/.test(password)) {
       return send(res, 400, {error:'password'});
     }
-    const reservation = await ref.transaction(current => authorizePassword(current, identity, Date.now()));
-    if (!reservation.committed) return send(res, 409, {error:'authorization'});
-    const reservationExpiry = reservation.snapshot.val().until;
+    const reservation = await updateExisting(ref, current => authorizePassword(current, identity, Date.now()));
+    if (!reservation) return send(res, 409, {error:'authorization'});
+    const reservationExpiry = reservation.until;
 
     const state = await createFamilyAccount(identity.id, password);
-    await ref.transaction(current => {
+    await updateExisting(ref, current => {
       if (current?.state === 'processing' && current.owner === identity.owner && current.until === reservationExpiry) {
         return {state, owner:identity.owner, until:Date.now() + 2 * 60_000};
       }

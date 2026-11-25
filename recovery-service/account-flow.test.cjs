@@ -27,7 +27,9 @@ test('family activation, reveal, reset and password change keep the same linked 
         child: key => db.ref(path + '/' + key),
         get: async () => snapshot(records.get(path)),
         transaction: async update => {
-          const value = update(records.get(path) ?? null);
+          // RTDB can call the updater with an empty cache before checking the server.
+          let value = update(null);
+          if (value !== undefined && records.has(path)) value = update(records.get(path));
           if (value === undefined) return {committed:false, snapshot:snapshot(records.get(path))};
           records.set(path, value);
           return {committed:true, snapshot:snapshot(value)};
