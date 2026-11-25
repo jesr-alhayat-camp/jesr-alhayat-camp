@@ -1,6 +1,6 @@
 const element = id => document.getElementById(id);
 const statusBox = element('status');
-const sessionKey = 'camp-first-activation';
+const sessionKey = 'camp-first-activation-phone-v2';
 let session = sessionStorage.getItem(sessionKey);
 const resetCode = new URLSearchParams(location.search).get('reset');
 if (resetCode) history.replaceState(null, '', location.pathname);
@@ -38,6 +38,7 @@ function submit(id, action) {
       } else {
         statusBox.textContent = {
           identity: 'أدخل رقم هوية من 9 أرقام.',
+          phone: 'أدخل آخر 7 أرقام من الجوال المسجّل.',
           password: 'استخدم 8 أحرف على الأقل مع حروف وأرقام.',
           'reset-code': 'الرابط منتهي أو مستخدم. اطلب رابط جديد من الإدارة.',
           authorization: 'انتهت مهلة التحقّق. ارجع لبداية التفعيل وحاول مرة ثانية.'
@@ -68,16 +69,26 @@ function showState(state, retryAfterSeconds) {
 }
 
 submit('identity', async () => {
-  const result = await api('start', {id:element('id').value});
+  const result = await api('start', {id:element('id').value, phone:element('phone').value});
+  if (result.state === 'locked') {
+    const minutes = Math.max(1, Math.ceil(result.retryAfterSeconds / 60));
+    view('identity', 'وصلت لحدّ المحاولات. جرّب بعد حوالي ' + minutes + ' دقيقة.');
+    return;
+  }
+  if (result.state === 'incorrect') {
+    const remaining = result.remaining == null ? '' : ' المحاولات المتبقية: ' + result.remaining;
+    view('identity', 'تعذّر التحقق من البيانات. راجعها أو تواصل مع الإدارة.' + remaining);
+    return;
+  }
   session = result.session;
   sessionStorage.setItem(sessionKey, session);
-  view('questions', 'إلك ثلاث محاولات للتحقّق.');
+  element('identity').reset();
+  view('questions', 'كمّل التحقّق بإجابتك عن السؤالين.');
 });
 submit('questions', async () => {
   const result = await api('verify', {
     spouse:element('spouse').value,
-    members:element('members').value,
-    phone:element('phone').value
+    members:element('members').value
   });
   if (result.state === 'incorrect') {
     const remaining = result.remaining == null ? '' : ' عدد المحاولات المتبقية: ' + result.remaining;

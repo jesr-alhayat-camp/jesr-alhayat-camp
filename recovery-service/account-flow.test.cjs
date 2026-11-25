@@ -98,24 +98,25 @@ test('family activation, reveal, reset and password change keep the same linked 
     };
     assert.equal((await request(base + '/healthz')).status, 200);
     const lockId = '111222333';
-    const lockedSession = (await post('start', {id:lockId})).body.session;
     for (let remaining = 2; remaining >= 1; remaining--) {
-      assert.deepEqual((await post('verify', {session:lockedSession})).body, {state:'incorrect', remaining});
+      assert.deepEqual((await post('start', {id:lockId, phone:'1234567'})).body, {state:'incorrect', remaining});
     }
-    assert.equal((await post('verify', {session:lockedSession})).body.state, 'locked');
-    const freshSession = (await post('start', {id:lockId})).body.session;
-    assert.equal((await post('status', {session:freshSession})).body.state, 'locked');
-    const {session} = (await post('start', {id})).body;
-    const answers = {session, spouse:'987654321', members:'4', phone:'1234567'};
+    assert.equal((await post('start', {id:lockId, phone:'1234567'})).body.state, 'locked');
+    assert.equal((await post('start', {id:lockId, phone:'7654321'})).body.state, 'locked');
+    assert.deepEqual((await post('start', {id, phone:'7654321'})).body, {state:'incorrect', remaining:2});
+    const {session} = (await post('start', {id, phone:'1234567'})).body;
+    assert.ok(session);
+    assert.deepEqual((await post('verify', {session, spouse:'000000000', members:'4'})).body, {state:'incorrect', remaining:1});
+    const answers = {session, spouse:'987654321', members:'4'};
     assert.equal((await post('verify', answers)).body.state, 'verified');
-    const secondSession = (await post('start', {id})).body.session;
+    const secondSession = (await post('start', {id, phone:'1234567'})).body.session;
     assert.equal((await post('verify', {...answers, session:secondSession})).body.state, 'busy');
     assert.equal((await post('password', {session:secondSession, password:'Unauthorized synthetic 1'})).status, 409);
     assert.equal((await post('password', {session, password:'First synthetic 1'})).body.state, 'completed');
     assert.equal((await post('admin/reveal', {id}, 'family-token')).status, 403);
     assert.equal((await post('admin/reveal', {id}, 'admin-token', 'https://other.example')).status, 403);
     assert.equal((await post('admin/reveal', {id}, 'admin-token')).body.password, 'First synthetic 1');
-    const retrySession = (await post('start', {id})).body.session;
+    const retrySession = (await post('start', {id, phone:'1234567'})).body.session;
     assert.equal((await post('verify', {...answers, session:retrySession})).body.state, 'existing');
     for (const record of records.values()) {
       if (record?.state === 'completed') record.until = 0;

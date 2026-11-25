@@ -16,9 +16,12 @@ function sign(value) {
   return createHmac('sha256', secret).update(value).digest('base64url');
 }
 
-function session(id, now = Date.now()) {
+const phoneTag = (id, suffix) => sign('phone:' + id + ':' + suffix);
+const phoneSuffix = row => digits(row?.[5]).slice(-7);
+
+function session(id, suffix, now = Date.now()) {
   const payload = Buffer.from(JSON.stringify({
-    id, expires: now + windowMs + setupMs, nonce: randomBytes(24).toString('base64url')
+    id, phoneTag:phoneTag(id, suffix), expires: now + windowMs + setupMs, nonce: randomBytes(24).toString('base64url')
   })).toString('base64url');
   return payload + '.' + sign(payload);
 }
@@ -33,21 +36,20 @@ function readSession(token, now = Date.now()) {
 
   try {
     const value = JSON.parse(Buffer.from(payload, 'base64url'));
-    if (!/^\d{9}$/.test(value.id) || value.expires <= now) return null;
-    return { id: value.id, key: sign(value.id), owner: sign(token) };
+    if (!/^\d{9}$/.test(value.id) || !/^[-_A-Za-z0-9]{43}$/.test(value.phoneTag || '') || value.expires <= now) return null;
+    return { id: value.id, phoneTag:value.phoneTag, key: sign(value.id), owner: sign(token) };
   } catch {
     return null;
   }
 }
 
-function matches(row, answers) {
+function matches(row, answers, identity) {
   const spouses = [digits(row?.[8]), digits(row?.[11])].filter(id => /^\d{9}$/.test(id));
-  const phone = digits(row?.[5]);
+  const suffix = phoneSuffix(row);
   const members = Number(digits(row?.[26]));
   return spouses.includes(digits(answers.spouse)) && members > 0
     && /^\d{1,3}$/.test(digits(answers.members)) && Number(digits(answers.members)) === members
-    && phone.length >= 7 && /^\d{7}$/.test(digits(answers.phone))
-    && phone.slice(-7) === digits(answers.phone);
+    && /^\d{7}$/.test(suffix) && identity.phoneTag === phoneTag(identity.id, suffix);
 }
 
 function transition(current, identity, outcome, now) {
@@ -66,4 +68,4 @@ function authorizePassword(current, identity, now) {
   return {...current, state:'processing', until:now + processingMs};
 }
 
-module.exports = {authorizePassword, digits, matches, readSession, session, transition};
+module.exports = {authorizePassword, digits, matches, phoneSuffix, readSession, session, transition};

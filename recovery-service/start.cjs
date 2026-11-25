@@ -4,7 +4,7 @@ const path = require('node:path');
 const { applicationDefault, initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
-const { authorizePassword, digits, matches, readSession, session, transition } = require('./recovery.cjs');
+const { authorizePassword, digits, matches, phoneSuffix, readSession, session, transition } = require('./recovery.cjs');
 
 if (Buffer.byteLength(process.env.CAMP_RECOVERY_SECRET || '') < 32) {
   throw new Error('Set a stable CAMP_RECOVERY_SECRET of at least 32 random bytes.');
@@ -59,6 +59,10 @@ const staticFiles = {
   '/recovery.js': ['recovery.js', 'text/javascript; charset=utf-8'],
   '/recovery.css': ['recovery.css', 'text/css; charset=utf-8']
 };
+
+function lockoutState(record) {
+  return {state:'locked', retryAfterSeconds:Math.max(1, Math.ceil((record.until - Date.now()) / 1000))};
+}
 
 function send(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -214,8 +218,27 @@ const server = http.createServer(async (req, res) => {
     }
     if (name === '/api/start') {
       const id = digits(body.id);
+      const suffix = digits(body.phone);
       if (!/^\d{9}$/.test(id)) return send(res, 400, {error:'identity'});
-      return send(res, 200, {session:session(id)});
+      if (!/^\d{7}$/.test(suffix)) return send(res, 400, {error:'phone'});
+      const verifiedSession = session(id, suffix);
+      const identity = readSession(verifiedSession);
+      const ref = requests.child(identity.key);
+      const record = (await ref.get()).val();
+      if (record?.state === 'attempts' && record.failures >= 3 && record.until > Date.now()) {
+        return send(res, 200, lockoutState(record));
+      }
+      const row = await lookupFamily(id);
+      if (row && phoneSuffix(row) === suffix) {
+        return send(res, 200, {state:'questions', session:verifiedSession});
+      }
+      const result = await ref.transaction(current => transition(current, identity, 'incorrect', Date.now()));
+      const updated = result.snapshot.val();
+      if (updated?.state === 'attempts' && updated.failures >= 3) {
+        return send(res, 200, lockoutState(updated));
+      }
+      const remaining = updated?.state === 'attempts' ? 3 - updated.failures : undefined;
+      return send(res, 200, {state:'incorrect', remaining});
     }
 
     const identity = readSession(body.session);
@@ -225,7 +248,7 @@ const server = http.createServer(async (req, res) => {
     if (name === '/api/verify') {
       const row = await lookupFamily(identity.id);
       let outcome = 'incorrect';
-      if (row && matches(row, body)) {
+      if (row && matches(row, body, identity)) {
         const portal = await db.ref('portal/' + identity.id).get();
         if (await accountExists(identity.id)) outcome = 'existing';
         else outcome = portal.exists() ? 'verified' : 'contact';
@@ -234,8 +257,7 @@ const server = http.createServer(async (req, res) => {
       const record = result.snapshot.val();
       if (record?.state === 'attempts') {
         if (record.failures >= 3) {
-          const retryAfterSeconds = Math.max(1, Math.ceil((record.until - Date.now()) / 1000));
-          return send(res, 200, {state:'locked', retryAfterSeconds});
+          return send(res, 200, lockoutState(record));
         }
         return send(res, 200, {state:'incorrect', remaining:3 - record.failures});
       }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>تفعيل حساب الأسرة</title>
   <link rel="stylesheet" href="/recovery.css">
-  <script defer src="/recovery.js"></script>
+  <script defer src="/recovery.js?v=phone-first"></script>
 </head>
 <body>
   <main>
@@ -15,6 +15,8 @@
     <form id="identity">
       <label for="id">رقم هوية رب الأسرة</label>
       <input id="id" dir="ltr" inputmode="numeric" autocomplete="username" required maxlength="9">
+      <label for="phone">آخر 7 أرقام من الجوال المسجّل</label>
+      <input id="phone" dir="ltr" inputmode="numeric" required maxlength="7">
       <button>متابعة</button>
     </form>
     <form id="questions" hidden>
@@ -22,8 +24,6 @@
       <input id="spouse" dir="ltr" inputmode="numeric" required maxlength="9">
       <label for="members">عدد أفراد الأسرة المسجّل</label>
       <input id="members" dir="ltr" inputmode="numeric" required maxlength="3">
-      <label for="phone">آخر 7 أرقام من الجوال المسجّل (بدون 059 أو 056)</label>
-      <input id="phone" dir="ltr" inputmode="numeric" required maxlength="7">
       <button>تحقّق من الإجابات</button>
     </form>
     <form id="password" hidden>
