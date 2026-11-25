@@ -1,11 +1,12 @@
-const { createCipheriv, createDecipheriv, randomBytes } = require('node:crypto');
+const { createCipheriv, createDecipheriv, randomBytes, scryptSync } = require('node:crypto');
 
 function createPasswordStore(secret) {
-  if (typeof secret !== 'string' || !/^[a-f0-9]{64}$/i.test(secret)) {
-    throw new Error('Set CAMP_PASSWORD_ENCRYPTION_KEY to a random 32-byte hex key.');
+  if (typeof secret !== 'string' || Buffer.byteLength(secret) < 32) {
+    throw new Error('Set CAMP_PASSWORD_ENCRYPTION_KEY to a random secret of at least 32 bytes.');
   }
 
-  const key = Buffer.from(secret, 'hex');
+  const key = /^[a-f0-9]{64}$/i.test(secret) ? Buffer.from(secret, 'hex')
+    : scryptSync(secret, 'jesr-family-password-key-v1', 32);
   const associatedData = uid => Buffer.from('camp-family-password:v1:' + uid);
 
   return {
