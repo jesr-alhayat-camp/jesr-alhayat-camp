@@ -88,7 +88,7 @@ test('family activation, reveal, reset and password change keep the same linked 
     require('./start.cjs');
     await new Promise(resolve => server.once('listening', resolve));
     const base = 'http://127.0.0.1:' + server.address().port;
-    const origin = 'https://alhayacamp-a31eb.web.app';
+    const origin = 'https://alhayacamp.web.app';
     const post = async (route, body, token, site = origin) => {
       const headers = {'Content-Type':'application/json', Origin:site};
       if (token) headers.Authorization = 'Bearer ' + token;

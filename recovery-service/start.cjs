@@ -19,7 +19,9 @@ if (!['aljalacamp-test', 'alhayacamp-a31eb'].includes(project)) {
 }
 const passwordStore = project === 'alhayacamp-a31eb'
   ? createPasswordStore(process.env.CAMP_PASSWORD_ENCRYPTION_KEY) : null;
-const adminOrigin = 'https://' + project + '.web.app';
+const defaultOrigin = 'https://' + project + '.web.app';
+const siteOrigin = passwordStore ? 'https://alhayacamp.web.app' : defaultOrigin;
+const allowedOrigins = new Set([siteOrigin, defaultOrigin]);
 const adminPaths = new Set(['/api/admin/reset-link', '/api/admin/reveal']);
 const changePath = '/api/change-password';
 const resetPath = '/api/complete-reset';
@@ -132,7 +134,7 @@ const server = http.createServer(async (req, res) => {
     });
     const content = fs.readFileSync(path.join(__dirname, 'site', file), 'utf8');
     res.end(name === '/' && passwordStore
-      ? content.replace('مخيم الأصدقاء الجلاء', 'مخيم جسر الحياة').replace('https://aljalacamp-test.web.app/', adminOrigin + '/')
+      ? content.replace('مخيم الأصدقاء الجلاء', 'مخيم جسر الحياة').replace('https://aljalacamp-test.web.app/', siteOrigin + '/')
       : content);
     return;
   }
@@ -140,8 +142,8 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, {status:'ok'});
   }
   if (adminPaths.has(name) || name === changePath) {
-    if (req.headers.origin !== adminOrigin) return send(res, 403, {error:'origin'});
-    res.setHeader('Access-Control-Allow-Origin', adminOrigin);
+    if (!allowedOrigins.has(req.headers.origin)) return send(res, 403, {error:'origin'});
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
     res.setHeader('Vary', 'Origin');
