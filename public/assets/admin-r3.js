@@ -986,9 +986,31 @@
             loadPendingAddRequests(); alert(isEdit && editIdx >= 0 ? '✅ تمت الموافقة وتعديل بيانات الطفل بنجاح!' : '✅ تمت الموافقة وإضافة السجل للكشوفات بنجاح!');
         }
 
+        function askRejectionReason(onConfirm) {
+            if (document.getElementById('rejectReasonDialog')) return;
+            const dialog = document.createElement('dialog');
+            dialog.id = 'rejectReasonDialog';
+            dialog.setAttribute('aria-labelledby', 'rejectTitle');
+            dialog.innerHTML = '<form method="dialog"><h3 id="rejectTitle">رفض الطلب</h3><label for="rejectReason">سبب الرفض (اختياري، يظهر للعائلة)</label><textarea id="rejectReason" maxlength="300" autofocus></textarea><div class="btnrow"><button class="btn btn-red" value="reject">تأكيد الرفض</button><button class="btn btn-blue" value="cancel">إلغاء</button></div></form>';
+            dialog.addEventListener('submit', event => {
+                event.preventDefault();
+                const reason = dialog.querySelector('textarea').value.trim();
+                dialog.close();
+                dialog.remove();
+                if (event.submitter?.value === 'reject') onConfirm(reason);
+            });
+            dialog.addEventListener('close', () => dialog.remove(), {once:true});
+            document.body.appendChild(dialog);
+            dialog.showModal();
+        }
+
         function rejectAddReq(dbKey, reqKey) {
+            if (!obj(dbKey + '_reqs')[reqKey]) return;
+            askRejectionReason(why => finishRejectAddReq(dbKey, reqKey, why));
+        }
+
+        function finishRejectAddReq(dbKey, reqKey, why) {
             const reqs = localDB[dbKey + '_reqs'] || {}, item = reqs[reqKey]; if (!item) return;
-            const why = prompt('سبب الرفض (يظهر للعائلة في بوابتها، يمكن تركه فارغاً):', ''); if (why === null) return;
             delete reqs[reqKey]; rdb.ref(dbKey + '_reqs/' + reqKey).remove();
             audit('رفض طلب ' + (isChildEdit(dbKey, item.payload) ? 'تعديل بيانات طفل' : REQ_LABEL[dbKey]), (item.payload && item.payload[0] || '') + ' | أسرة ' + item.id + (why ? ' | ' + why : ''));
             logReq(reqKey, item.id, dbKey, 'rejected', why, (isChildEdit(dbKey, item.payload) ? 'تعديل بيانات طفل: ' : '') + (item.payload && item.payload[0] || ''));
@@ -1103,8 +1125,13 @@
             reqs.splice(index, 1); saveDB('db_edit_requests', reqs); switchTab('requests');
         }
         function rejectRequest(index) {
-            let reqs = getDB('db_edit_requests'), req = reqs[index]; if (!req) return;
-            const why = prompt('سبب الرفض (يظهر للعائلة في بوابتها، يمكن تركه فارغاً):', ''); if (why === null) return;
+            const req = getDB('db_edit_requests')[index];
+            if (req) askRejectionReason(why => finishRejectRequest(req, why));
+        }
+        function finishRejectRequest(req, why) {
+            const reqs = getDB('db_edit_requests');
+            const index = reqs.findIndex(item => item === req || (req.rid && item?.rid === req.rid));
+            if (index < 0) { toast('تغيّر الطلب. حدّث القائمة وافتحه من جديد.', 'warn'); return; }
             audit('رفض طلب تعديل', req.name + (why ? ' | ' + why : ''));
             logReq(req.rid, req.id, 'db_edit_requests', 'rejected', why, 'تعديل بيانات الأسرة');
             reqs.splice(index, 1); saveDB('db_edit_requests', reqs); switchTab('requests');
