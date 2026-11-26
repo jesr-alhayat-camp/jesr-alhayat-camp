@@ -1,0 +1,17 @@
+#settings-tab .card { max-width: 40rem; }
+#settings-tab h2 { margin: 0 0 1rem; font-size: 1.15rem; }
+#settings-tab label { display: block; margin: .9rem 0 .3rem; }
+#settings-tab :is(input,select) { box-sizing: border-box; width: 100%; }
+#settings-tab button { margin-top: 1rem; }
+#adminPasswordStatus:empty { display: none; }
+html[data-admin-theme=dark] { color-scheme: dark; --canvas: #101b22; --bg: #101b22; --surface: #1b2a34; --ink: #edf4f6; --muted: #b4c6ce; --line: #465863; }
+[data-admin-theme=dark] .modern-admin :is(.admin-layout,.content) { background: #101b22 !important; color: #edf4f6; }
+[data-admin-theme=dark] .modern-admin :is(.card,.modal,dialog,.stat,.table-responsive,table,td,.login-card,.topbar) { background: #1b2a34 !important; color: #edf4f6 !important; border-color: #465863 !important; }
+[data-admin-theme=dark] .modern-admin :is(th,input,select,textarea) { background: #243844 !important; color: #f3f7fa !important; border-color: #617783 !important; }
+[data-admin-theme=dark] .modern-admin :is(.header h1,.card h2,.card-title,label,#dashboard-tab > .header h1) { color: #edf4f6 !important; }
+[data-admin-theme=dark] .modern-admin :is(.card,.modal,.stat) [style*="color:#64748b"] { color: #bccad2 !important; }
+[data-admin-theme=dark] .modern-admin #dashboard-tab .hero,
+[data-admin-theme=dark] .modern-admin #dashContent :is(.card,.stat),
+[data-admin-theme=dark] .modern-admin :is(.adv-toggle,.adv-export,.adv-print,.adv-chip,.adv-box,.adv-list,.adv-del,.ck-box,#ckBtn,#ckInput,.tbl-loading) { background: #20313e !important; color: #edf4f6 !important; border-color: #465863 !important; }
+[data-admin-theme=dark] .modern-admin #dashboard-tab .hero :is(h2,p),
+[data-admin-theme=dark] .modern-admin #dashContent .stat :is(.s-l,b) { color: #edf4f6 !important; }

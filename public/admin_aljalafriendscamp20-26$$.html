@@ -19,6 +19,8 @@
     
     <link rel="stylesheet" href="/assets/admin-r3.css">
     <link rel="stylesheet" href="/assets/camp-admin-modern.css">
+    <link rel="stylesheet" href="/assets/admin-settings.css">
+    <script defer src="/assets/admin-settings.js"></script>
 </head>
 <body class="modern-admin">
     <div id="syncLoader" aria-hidden="true" style="display:none"><i></i></div>
@@ -55,6 +57,7 @@
                 <li id="nav-fund" onclick="switchTab('fund')">💰 صندوق المخيم</li>
                 <li id="nav-subscribers" onclick="switchTab('subscribers')" style="background-color: #059669; margin-top: 10px;">💸 دافعو الاشتراك</li>
                 <li id="nav-audit" onclick="switchTab('audit')" style="background-color:#334155;margin-top:10px;">🕵️ سجل العمليات</li>
+                <li id="nav-settings" onclick="switchTab('settings')">⚙️ الإعدادات</li>
             </ul>
         </aside>
 
@@ -129,6 +132,22 @@
             </div>
 
             <!-- سجل العمليات -->
+            <section id="settings-tab" class="tab-content" aria-labelledby="settingsTitle">
+                <div class="header"><h1 id="settingsTitle">الإعدادات</h1></div>
+                <div class="card"><h2>مظهر لوحة الإدارة</h2>
+                    <label for="adminTheme">المظهر على هذا الجهاز</label>
+                    <select id="adminTheme"><option value="light">فاتح</option><option value="dark">ليلي</option><option value="system">حسب إعدادات الجهاز</option></select>
+                </div>
+                <div class="card"><h2>تغيير كلمة سر حسابي</h2>
+                    <form id="adminPasswordForm">
+                        <label for="adminCurrentPassword">كلمة السر الحالية</label><input id="adminCurrentPassword" type="password" autocomplete="current-password" required>
+                        <label for="adminNewPassword">كلمة السر الجديدة (8 خانات على الأقل)</label><input id="adminNewPassword" type="password" autocomplete="new-password" minlength="8" required>
+                        <label for="adminConfirmPassword">تأكيد كلمة السر الجديدة</label><input id="adminConfirmPassword" type="password" autocomplete="new-password" required>
+                        <button class="btn btn-green" type="submit">حفظ كلمة السر</button>
+                        <p id="adminPasswordStatus" role="status" aria-live="polite"></p>
+                    </form>
+                </div>
+            </section>
             <div id="audit-tab" class="tab-content">
                 <div class="header"><h1>🕵️ سجل العمليات</h1></div>
                 <div class="card">
