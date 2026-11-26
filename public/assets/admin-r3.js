@@ -1018,6 +1018,12 @@
         }
 
         let _pwBusy = false;
+        let lastAccountWarmup = -Infinity;
+        function warmAccountService() {
+            if (isLimited || !window.CAMP_RECOVERY_URL || performance.now() - lastAccountWarmup < 15 * 60_000) return;
+            lastAccountWarmup = performance.now();
+            fetch(new URL('/healthz', window.CAMP_RECOVERY_URL), {mode:'no-cors', credentials:'omit'}).catch(() => {});
+        }
         function famByKey(key) { return getDB('db_families').find(f => f && safeKey(digitsOf(f[2])) === key); }
         function claimUidOf(key) {
             const c = localDB.claims || {};
@@ -1031,13 +1037,18 @@
             }
             if (action === 'reset-link' && !confirm('هل تحققت من هوية العائلة قبل إصدار رابط إعادة التعيين؟')) return;
             _pwBusy = true;
+            const status = document.getElementById('accountActionStatus');
+            status.textContent = 'جارٍ الاتصال بخدمة الحسابات…';
+            const waiting = setTimeout(() => { status.textContent = 'لسّه بنستنى ردّ الخدمة. خليك على الصفحة.'; }, 4000);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 75000);
             try {
                 const token = await auth.currentUser.getIdToken();
                 const endpoint = new URL('/api/admin/' + action, window.CAMP_RECOVERY_URL);
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + token},
-                    body: JSON.stringify({id: key})
+                    body: JSON.stringify({id: key}), signal: controller.signal
                 });
                 const result = await response.json();
                 if (response.status === 401) {
@@ -1045,21 +1056,29 @@
                 } else if (response.status === 404) {
                     alert(action === 'reveal' ? 'كلمة السر غير متاحة. استخدم إعادة التعيين.' : 'ما في حساب دخول فعّال مربوط بهالعائلة.');
                 } else if (response.ok && action === 'reveal') {
-                    button.textContent = result.password;
-                    setTimeout(() => { button.textContent = 'إظهار'; }, 10000);
+                    if (!document.getElementById('passwords-tab').classList.contains('active-tab')) return;
+                    const target = button.isConnected ? button : document.getElementById('reveal-' + key);
+                    if (target) {
+                        target.textContent = result.password;
+                        setTimeout(() => { target.textContent = 'إظهار'; }, 10000);
+                    }
                 } else if (response.ok && action === 'reset-link') {
                     prompt('انسخ الرابط وسلّمه للعائلة مباشرة بعد التحقق من هويتها:', result.link);
                 } else {
                     alert('تعذّر إكمال الطلب. تأكّد من صلاحياتك وحاول مرة ثانية.');
                 }
             } catch {
-                alert('تعذّر الاتصال بخدمة حسابات العائلات.');
+                alert(controller.signal.aborted ? 'الخدمة تأخّرت بالرد. جرّب مرة ثانية.' : 'تعذّر الاتصال بخدمة حسابات العائلات.');
             } finally {
+                clearTimeout(waiting);
+                clearTimeout(timeout);
+                status.textContent = '';
                 _pwBusy = false;
             }
         }
 
         function loadPasswordsTable() {
+            warmAccountService();
             const tbody = document.querySelector('#passwordsTable tbody');
             const q = (document.getElementById('pwSearch').value || '').trim().toLowerCase(); tbody.innerHTML = ''; let n = 0; const prow = [];
             const claimed = new Set(Object.values(localDB.claims || {}).map(c => c && safeKey(String(c.id))));
@@ -1068,7 +1087,7 @@
                 const cleanKey = safeKey(digitsOf(fam[2]));
                 n++;
                 const active = claimed.has(cleanKey);
-                const pwCell = active ? '<button class="btn btn-blue" onclick="familyAccountAction(\'' + esc(cleanKey) + '\',\'reveal\',this)">إظهار</button>' : '—';
+                const pwCell = active ? '<button id="reveal-' + esc(cleanKey) + '" class="btn btn-blue" onclick="familyAccountAction(\'' + esc(cleanKey) + '\',\'reveal\',this)">إظهار</button>' : '—';
                 const btns = active ? '<button class="btn btn-blue" onclick="familyAccountAction(\'' + esc(cleanKey) + '\',\'reset-link\')">إعادة تعيين كلمة السر</button>' : '';
                 prow.push('<tr><td>' + n + '</td><td>' + esc(fam[2]) + '</td><td><strong>' + esc(fam[1]) + '</strong></td><td style="direction:ltr;font-weight:bold;">' + pwCell + '</td><td style="color:' + (active ? '#10b981' : '#64748b') + ';font-weight:bold;">' + (active ? '✅ مفعّل' : 'لم يفعّل') + '</td><td style="white-space:nowrap;">' + btns + '</td></tr>');
             });
