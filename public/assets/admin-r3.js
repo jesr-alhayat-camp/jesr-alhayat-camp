@@ -15,7 +15,7 @@
             db_families: [], db_aids: [], db_injured: [], db_orphans: [],
             db_children: [], db_chronic: [], db_fund: [], db_stock: [], db_complaints: [],
             db_edit_requests: [], db_passwords: {}, pwvault: {},
-            db_children_reqs: {}, db_chronic_reqs: {}, db_injured_reqs: {},
+            db_children_reqs: {}, db_chronic_reqs: {}, db_injured_reqs: {}, db_orphans_reqs: {},
             db_reqlog: {}, db_audit: {}, db_announcements: {}, config: {}, claims: {}
         };
         
@@ -71,7 +71,53 @@
             if (/^\d{1,2}[-\/.]\d{1,2}[-\/.](\d{2}|\d{4})$/.test(s) || /^\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}$/.test(s)) return formatDateValue(s);
             return String(v).trim();
         }
+        function sectorKey(value) {
+            const name = String(value ?? '').trim();
+            return Object.values(localDB.config?.sectorNames || {}).find(s => normAr(s.label) === normAr(name))?.key || name;
+        }
+        function sectorName(key) {
+            return Object.values(localDB.config?.sectorNames || {}).find(s => s.key === key)?.label || key || '';
+        }
+        const originalSectors = Array.from(document.querySelectorAll('#f_1 option'),o => o.value).filter(Boolean);
+        function renderSectorSettings() {
+            const defs = Object.values(localDB.config?.sectorNames || {});
+            const keys = [...new Set([...originalSectors,...getDB('db_families').map(f => f?.[0]),...defs.map(x => x.key)].filter(Boolean))];
+            const options = keys.map(k => '<option value="' + esc(k) + '">' + esc(sectorName(k)) + '</option>').join('');
+            const select = document.getElementById('f_1'), old = select.value;
+            select.innerHTML = '<option value="">اختر القاطع</option>' + options;
+            select.value = old;
+            document.getElementById('sectorSettings').hidden = ROLE !== 'super_admin';
+            const manage = document.getElementById('sectorKey'), selected = manage.value;
+            manage.innerHTML = '<option value="">إضافة قاطع جديد</option>' + options;
+            manage.value = selected;
+        }
+        async function saveSectorName(event) {
+            event.preventDefault();
+            if (ROLE !== 'super_admin') return;
+            const label = document.getElementById('sectorLabel').value.trim();
+            const chosen = document.getElementById('sectorKey').value;
+            if (!label) return;
+            if (!chosen && (/[.#$\[\]\/]/.test(label) || Object.hasOwn(Object.prototype,normAr(label)))) {toast('اختَر اسم قاطع بدون رموز خاصة.','warn');return;}
+            const key = chosen || label;
+            const legacy = [...originalSectors,...getDB('db_families').map(f => f?.[0]).filter(Boolean)];
+            const ref = rdb.ref('config/sectorNames');
+            try {
+                const saved = await ref.transaction(current => {
+                    const entries = Object.values(current || {});
+                    if ([...legacy,...entries.map(s => s.key)].some(k => normAr(k) === normAr(label) && (!chosen || k !== chosen)) ||
+                        entries.some(s => (!chosen || s.key !== chosen) && normAr(s.label) === normAr(label))) return;
+                    return [...entries.filter(s => s.key !== key), {key,label}];
+                });
+                if (!saved.committed) {toast('اسم القاطع مستخدم.','warn');return;}
+                localDB.config.sectorNames = saved.snapshot.val();
+                renderSectorSettings(); event.target.reset();
+                const affected = getDB('db_families').filter(f=>f?.[0]===key).map(f=>digitsOf(f[2]));
+                if(affected.length) schedulePublish(affected);
+                toast('تم حفظ القاطع.');
+            } catch { toast('تعذّر حفظ اسم القاطع.','err'); }
+        }
         function formatCellForDB(dbKey, fieldIndex, value) {
+            if ((dbKey === 'db_families' && fieldIndex === 0) || (dbKey === 'db_aids' && fieldIndex === 2)) return sectorName(value);
             if (dbKey === 'db_aids' && fieldIndex === 4) return smartNote(value);
             if (Object.prototype.toString.call(value) === '[object Date]') return formatDateValue(value);
             return DATE_FIELDS[dbKey] && DATE_FIELDS[dbKey].includes(fieldIndex) ? formatDateValue(value) : (value==null?'':String(value));
@@ -84,14 +130,14 @@
         }
         function normalizeImportedRow(dbKey,row,fieldCount) {
             return Array.from({length:fieldCount},(_,i)=>{
-                let v = formatCellForDB(dbKey,i,row[i]);
+                let v = ((dbKey === 'db_families' && i === 0) || (dbKey === 'db_aids' && i === 2)) ? sectorKey(row[i]) : formatCellForDB(dbKey,i,row[i]);
                 if (PHONE_FIELDS[dbKey] && PHONE_FIELDS[dbKey].includes(i)) v = fixPhone(v);
                 return v;
             });
         }
         const CHRONIC_LABELS=['المريض','الهوية','الميلاد','الجنس','المرض','الدواء / ملاحظات','الجوال'];
         const INJ_LABELS=['اسم المصاب','الهوية','الميلاد','نوع ومكان الإصابة','الجوال','ملاحظات','بقاعدة الأسر؟'];
-        const REQ_LABEL={db_edit_requests:'تعديل بيانات',db_children:'إضافة / تعديل طفل',db_chronic:'إضافة مريض مزمن',db_injured:'تسجيل إصابة',db_complaints:'شكوى / طلب'};
+        const REQ_LABEL={db_edit_requests:'تعديل بيانات',db_children:'إضافة / تعديل طفل',db_chronic:'إضافة مريض مزمن',db_injured:'تسجيل إصابة',db_orphans:'إضافة يتيم',db_complaints:'شكوى / طلب'};
         const LOCKED_IDX=[0,1,2,39];
         const ST_LABEL={pending:'قيد المراجعة',accepted:'تمت الموافقة',rejected:'مرفوض',answered:'تم الرد'};
         const ST_COLOR={pending:'#d97706',accepted:'#16a34a',rejected:'#dc2626',answered:'#2563eb'};
@@ -115,6 +161,7 @@
             const nv=(i,v)=>{v=toLatin(v==null?'':v).trim();if(i>=14&&i<=25&&v==='')v='0';if([4,10,13].includes(i))v=formatDateValue(v);return v;};
             const out=[];
             for(let i=0;i<40;i++){const a=nv(i,oldRow[i]),b=nv(i,newRow[i]);if(a!==b)out.push({i:i,a:a,b:b,locked:LOCKED_IDX.includes(i)});}
+            if(newRow[41] != null && String(oldRow[41] ?? '') !== String(newRow[41])) out.push({i:41,a:oldRow[41] ?? '',b:newRow[41],locked:false});
             return out;
         }
         function childrenOf(key){return getDB('db_children').filter(c=>c&&(safeKey(digitsOf(c[5]))===key||safeKey(digitsOf(c[8]))===key));}
@@ -140,11 +187,12 @@
             const key=safeKey(digitsOf(fam[2]));
             const kids=childrenOf(key);
             const aids=getDB('db_aids').filter(a=>a&&digitsOf(a[1])===key);
-            const inj=getDB('db_injured').filter(i=>i&&digitsOf(i[1])===key);
+            const owners=injuryOwners(getDB('db_families'),getDB('db_children'));
+            const inj=getDB('db_injured').filter(i=>i&&injuryFamily(i,owners)===key);
             const chr=getDB('db_chronic').filter(c=>c&&digitsOf(c[1])===key);
-            const orp=getDB('db_orphans').filter(o=>o&&(digitsOf(o[4])===key||digitsOf(o[7])===key));
+            const orp=getDB('db_orphans').filter(o=>o&&(orphanKeys(o).includes(key)));
             const logs=Object.values(obj('db_reqlog')).filter(l=>l&&l.fid===key).sort((a,b)=>String(b.d).localeCompare(String(a.d))).slice(0,10);
-            let h=kvTable(FAM_LABELS,fam);
+            let h=kvTable(FAM_LABELS,[sectorName(fam[0]),...fam.slice(1)]) + '<p>عدد المصابين المُبلّغ عنه: ' + esc(fam[41] ?? 'غير محدد') + '</p>';
             h+='<h4>👶 الأطفال المسجلون ('+kids.length+')</h4>'+miniTable(['الاسم','الهوية','الميلاد','العمر','الجنس','ملاحظات'],kids.map(c=>[c[0],c[1],c[2],ageOf(c[2]),c[3],c[9]]),'لا يوجد أطفال مسجلون');
             h+='<h4>📦 المساعدات المستلمة ('+aids.length+')</h4>'+miniTable(['النوع','الكمية','ملاحظة'],aids.map(a=>[a[3],a[5],smartNote(a[4])]),'لا توجد مساعدات');
             h+='<h4>🛡️ أيتام / مصابون / أمراض مزمنة</h4>'+miniTable(['النوع','الاسم','تفاصيل'],orp.map(o=>['يتيم',o[0],'الوصي: '+(o[3]||'-')]).concat(inj.map(i=>['مصاب',i[0],i[3]])).concat(chr.map(c=>['مزمن',c[0],c[4]])),'لا يوجد');
@@ -154,8 +202,8 @@
         function showFamilyByKey(key){
             const fam=famByKey(key); if(!fam){alert('❌ لم يتم العثور على الأسرة في القاعدة.');return;}
             const wa=waLink(fam[5],'السلام عليكم '+fam[1]+'، معك إدارة مخيم جسر الحياة بخصوص: ');
-            openModal('<h3>👤 '+esc(fam[1])+' <small style="color:#64748b;">('+esc(fam[2])+' - '+esc(fam[0])+')</small></h3>'+familyHTML(fam)
-              +'<div class="btnrow"><button class="btn btn-blue" onclick="printFamily(\''+esc(key)+'\')">🖨 طباعة البطاقة</button>'
+            openModal('<h3>👤 '+esc(fam[1])+' <small style="color:#64748b;">('+esc(fam[2])+' - '+esc(sectorName(fam[0]))+')</small></h3>'+familyHTML(fam)
+              +'<div class="btnrow">'+familyAidButton(key)+'<button class="btn btn-blue" onclick="printFamily(\''+esc(key)+'\')">🖨 طباعة البطاقة</button>'
               +(wa?'<a class="btn btn-green" target="_blank" rel="noopener" href="'+esc(wa)+'">💬 واتساب</a>':'')
               +'<button class="btn btn-red" onclick="closeModal()">إغلاق</button></div>');
         }
@@ -222,7 +270,7 @@
         }
         function countBy(arr,fn){const m={};arr.forEach(x=>{let k=String(fn(x)||'').trim()||'غير محدد';m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
         function pendingTotal(){
-            return getDB('db_edit_requests').length+getDB('db_complaints').filter(c=>c&&!c[7]).length+Object.keys(obj('db_children_reqs')).length+Object.keys(obj('db_chronic_reqs')).length+Object.keys(obj('db_injured_reqs')).length;
+            return getDB('db_edit_requests').length+getDB('db_complaints').filter(c=>c&&!c[7]).length+Object.keys(obj('db_children_reqs')).length+Object.keys(obj('db_chronic_reqs')).length+Object.keys(obj('db_injured_reqs')).length + Object.keys(obj('db_orphans_reqs')).length;
         }
         function loadDashboard(){
             const fams=getDB('db_families').filter(Boolean), num=v=>parseInt(toLatin(v),10)||0;
@@ -352,39 +400,46 @@
             if(hits.length>1){box.innerHTML='<p>تم العثور على '+hits.length+' نتيجة، اختر الأسرة:</p>'+hits.slice(0,40).map(f=>'<button class="btn btn-blue" style="margin:3px;" onclick="quickShow(\''+esc(safeKey(digitsOf(f[2])))+'\')">'+esc(f[1])+' ('+esc(f[2])+')</button>').join('');return;}
             quickShow(safeKey(digitsOf(hits[0][2])));
         }
+        function familyAidButton(id) {
+            return '<button class="btn btn-green" onclick="closeModal();switchTab(\'quick\');quickShow(\''+digitsOf(id)+'\')">إضافة مساعدة</button>';
+        }
         function quickShow(key){
             const f=famByKey(key), box=document.getElementById('qResult'); if(!f){box.innerHTML='<p class="warn">❌ غير موجودة.</p>';return;}
             const aids=getDB('db_aids').filter(a=>a&&digitsOf(a[1])===key), kids=childrenOf(key);
             box.innerHTML='<div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;padding:14px;">'
               +'<div style="font-size:17px;font-weight:bold;">'+esc(f[1])+'</div>'
-              +'<div style="font-size:13px;color:#334155;margin-top:4px;">الهوية: '+esc(f[2])+' · القاطع: '+esc(f[0])+' · الأفراد: '+esc(f[26])+' · الجوال: '+esc(f[5])+' · أطفال مسجلون: '+kids.length+'</div></div>'
+              +'<div style="font-size:13px;color:#334155;margin-top:4px;">الهوية: '+esc(f[2])+' · القاطع: '+esc(sectorName(f[0]))+' · الأفراد: '+esc(f[26])+' · الجوال: '+esc(f[5])+' · أطفال مسجلون: '+kids.length+'</div></div>'
               +'<h4 style="margin:12px 0 6px;color:#0f766e;">آخر المساعدات ('+aids.length+')</h4>'+miniTable(['النوع','الكمية','ملاحظة'],aids.slice(-5).reverse().map(a=>[a[3],a[5],a[4]]),'لم تستلم أي مساعدة بعد')
-              +'<div class="form-grid" style="margin-top:12px;"><div class="input-group"><label>نوع المساعدة</label><input type="text" id="qType" list="qTypes" value="'+esc(_lastQType)+'" onkeydown="if(event.key===\'Enter\')quickRecord(\''+esc(key)+'\')"></div>'
-              +'<div class="input-group"><label>الكمية</label><input type="text" id="qQty" value="1"></div>'
+              +'<div class="form-grid" style="margin-top:12px;"><div class="input-group"><label>نوع المساعدة</label><input type="text" id="qType" list="qTypes" value="'+esc(_lastQType)+'"></div>'
+              +'<div class="input-group"><label>الكمية</label><input type="number" id="qQty" value="1" min="0.01" step="any"></div><div class="input-group"><label>تاريخ الاستلام</label><input type="date" id="qDate" value="'+today()+'"></div>'
               +'<div class="input-group"><label>ملاحظة (اختياري)</label><input type="text" id="qNote"></div></div>'
-              +'<button class="btn btn-green" onclick="quickRecord(\''+esc(key)+'\')">✅ تسجيل الاستلام</button>';
+              +'<button class="btn btn-green" onclick="quickRecord(\''+esc(key)+'\',this)">✅ تسجيل الاستلام</button>';
             setTimeout(()=>{const e=document.getElementById('qType');if(e)e.focus();},50);
         }
-        function quickRecord(key){
+        function quickRecord(key, button){
+            if(button?.disabled) return;
             const f=famByKey(key); if(!f) return;
             const type=document.getElementById('qType').value.trim(), qty=document.getElementById('qQty').value.trim()||'1', note=document.getElementById('qNote').value.trim();
             if(!type){alert('اكتب نوع المساعدة.');return;}
             const prev=getDB('db_aids').filter(a=>a&&digitsOf(a[1])===key&&String(a[3]).trim().toLowerCase()===type.toLowerCase());
             if(prev.length&&!confirm('⚠️ هذه الأسرة استلمت «'+type+'» سابقاً ('+prev.length+' مرة).\nهل تريد تسجيل استلام جديد؟')) return;
-            const row=[f[1],f[2],f[0],type,('['+today()+'] '+note).trim(),qty];
+            const date = document.getElementById('qDate').value;
+            if (!date || !(Number(qty)>0)) {toast('أدخل تاريخ الاستلام وكمية أكبر من صفر.','warn');return;}
+            if(button) button.disabled=true;
+            const row=[f[1],f[2],f[0],type,('['+date+'] '+note).trim(),qty,f[40] || ''];
             appendDBRecord('db_aids',row,safeKey(digitsOf(f[2]))).then(()=>{
                 audit('تسجيل استلام',f[1]+' | '+type+' | '+qty);
                 _lastQType=type; _qLog.unshift(new Date().toLocaleTimeString('en-GB')+' — '+f[1]+' — '+type+' ('+qty+')');
                 loadQuick(); document.getElementById('qResult').innerHTML='<p style="color:#047857;font-weight:bold;">✅ تم تسجيل الاستلام للأسرة: '+esc(f[1])+'</p>';
                 document.getElementById('qSearch').value=''; document.getElementById('qSearch').focus();
-            }).catch(err=>alert('❌ تعذر تسجيل الاستلام: '+(err.message||err)));
+            }).catch(err=>alert('❌ تعذر تسجيل الاستلام: '+(err.message||err))).finally(()=>{if(button)button.disabled=false;});
         }
 
         /* ================= الإعلانات ================= */
         function loadAnn(){
             const set=new Set(); getDB('db_families').forEach(f=>{if(f&&f[0])set.add(String(f[0]).trim());});
             const sel=document.getElementById('ann_sec'), cur=sel.value;
-            sel.innerHTML='<option value="all">كل القواطع</option>'+[...set].sort().map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join(''); sel.value=cur||'all';
+            sel.innerHTML='<option value="all">كل القواطع</option>'+[...set].sort().map(v=>'<option value="'+esc(v)+'">'+esc(sectorName(v))+'</option>').join(''); sel.value=cur||'all';
             const tb=document.querySelector('#annTable tbody'); tb.innerHTML=''; const ents=Object.entries(obj('db_announcements')).sort((a,b)=>(b[1].t||0)-(a[1].t||0));
             ents.forEach((e,i)=>{const a=e[1];tb.innerHTML+='<tr><td>'+(i+1)+'</td><td><strong>'+esc(a.ti)+'</strong></td><td style="white-space:normal;min-width:240px;">'+esc(a.tx)+'</td><td>'+esc(a.sec==='all'?'الكل':a.sec)+'</td><td>'+esc(a.exp||'-')+'</td><td><button class="btn btn-red" style="margin:0;padding:4px 8px;font-size:11px;" onclick="delAnn(\''+esc(e[0])+'\')">حذف</button></td></tr>';});
             if(!ents.length) tb.innerHTML='<tr><td colspan="6" style="text-align:center;">لا توجد إعلانات.</td></tr>';
@@ -531,7 +586,7 @@
                     if (passNav) passNav.style.display = 'none';
                     if (fundNav) fundNav.style.display = 'none';
                     if (subNav) subNav.style.display = 'none';
-                    ['nav-audit','nav-ann','nav-stock'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+                    ['nav-audit','nav-ann','nav-stock','nav-vulnerable'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
                 }
 
                 const li = document.createElement('li');
@@ -553,6 +608,7 @@
                     'db_chronic','db_complaints','db_edit_requests','db_children_reqs',
                     'db_chronic_reqs','db_injured_reqs','db_reqlog','db_announcements','config','inbox'
                 ] : Object.keys(localDB).filter(key => key !== 'db_audit').concat(['inbox']);
+                if (isLimited) rdb.ref('db_orphans_reqs').on('value', s => {localDB.db_orphans_reqs = s.val() || {}; if(!isFirstLoad) {refreshActive('db_orphans_reqs');queueBadgeUpdate();}}, () => {});
                 const __adminSyncStart = performance.now();
                 const pending = new Set(allowed);
                 const slowNotice = setTimeout(() => {
@@ -590,7 +646,8 @@
                 isFirstLoad = false;
                 document.querySelector('.content').inert = false;
                 hideLoader();
-                switchTab(adminRoute() || 'dashboard', false, true);
+                const preferred = document.getElementById('startTab').value;
+                switchTab(adminRoute() || (canOpenAdminPage(preferred) ? preferred : 'dashboard'), false, true);
                 if (localDB.inbox) ingestInbox(localDB.inbox);
             }
 
@@ -624,7 +681,7 @@
             let cReqs = Object.keys(localDB['db_children_reqs'] || {}).length;
             let chReqs = Object.keys(localDB['db_chronic_reqs'] || {}).length;
             let iReqs = Object.keys(localDB['db_injured_reqs'] || {}).length;
-            let total = reqs + comps + cReqs + chReqs + iReqs;
+            let total = reqs + comps + cReqs + chReqs + iReqs + Object.keys(obj('db_orphans_reqs')).length;
             let badge = document.getElementById('reqBadge');
             if (badge) {
                 if (total > 0) { badge.style.display = 'inline-block'; badge.innerText = total; } 
@@ -634,7 +691,7 @@
 
         const _inboxProcessing = new Set();
         async function ingestInbox(inbox) {
-            const ok = ['db_edit_requests','db_complaints','db_children','db_chronic','db_injured'];
+            const ok = ['db_edit_requests','db_complaints','db_children','db_chronic','db_injured','db_orphans'];
             for (const fid of Object.keys(inbox || {})) for (const k of Object.keys(inbox[fid] || {})) {
                 const pathKey = fid + '/' + k;
                 if (_inboxProcessing.has(pathKey)) continue;
@@ -651,13 +708,13 @@
                     if (!ok.includes(it.type) || it.payload == null) continue;
                     const rid = fid + '_' + k;
                     let title = '';
-                    if (['db_children','db_chronic','db_injured'].includes(it.type)) {
+                    if (['db_children','db_chronic','db_injured','db_orphans'].includes(it.type)) {
                         await rdb.ref(it.type + '_reqs/' + rid).set({id: fid, payload: it.payload, date: it.date || ''});
                         if (!localDB[it.type + '_reqs']) localDB[it.type + '_reqs'] = {};
                         localDB[it.type + '_reqs'][rid] = {id: fid, payload: it.payload, date: it.date || ''};
                         title = (it.type === 'db_children' && it.payload[10] === 'تعديل' ? 'تعديل بيانات طفل: ' : '') + String(it.payload[0] || '');
                     } else if (it.type === 'db_edit_requests') {
-                        const payload = Object.assign({}, it.payload, {rid});
+                        const payload = Object.assign({}, it.payload, {rid, id:fid});
                         await rdb.ref('db_edit_requests').transaction(cur => {
                             const arr = Array.isArray(cur) ? cur.slice() : (cur ? Object.values(cur) : []);
                             if (!arr.some(x => x && x.rid === rid)) arr.push(payload); return arr;
@@ -711,8 +768,26 @@
         function portalSafeRow(f) {
             // Keep the portal schema compatible with index.html. Field 39 is always internal notes.
             const row = Array.from({length: 40}, (_, i) => (f[i] == null ? '' : f[i]));
-            row[39] = '';
+            row[39] = ''; row[40]=''; row[41]=f[41] ?? ''; row[0] = sectorName(f[0]);
             return row;
+        }
+        function injuryOwners(families, children) {
+            const owners = new Map(), heads = new Set(families.filter(Boolean).map(f => digitsOf(f[2])).filter(Boolean));
+            function link(person, head) {
+                const id = digitsOf(person), family = digitsOf(head);
+                if (!id || !heads.has(family)) return;
+                if (!owners.has(id)) owners.set(id, family);
+                else if (owners.get(id) !== family) owners.set(id, '');
+            }
+            families.filter(Boolean).forEach(f => [2,9,12].forEach(i=>link(f[i],f[2])));
+            children.filter(Boolean).forEach(c=>{link(c[1],c[5]);link(c[1],c[8]);});
+            return owners;
+        }
+        function injuryFamily(row, owners) {
+            return digitsOf(row[7]) || owners.get(digitsOf(row[1])) || '';
+        }
+        function orphanKeys(row) {
+            return row[9] ? [digitsOf(row[9])] : [digitsOf(row[4]),digitsOf(row[7])].filter(Boolean);
         }
         function buildPortalRecord(f, aids, children, orphans, injured, anns, logs, vk, idx) {
             const k = safeKey(digitsOf(f[2]));
@@ -721,8 +796,8 @@
                 row: portalSafeRow(f),
                 aids: (idx ? (idx.aids.get(k) || []) : aids.filter(a => a && safeKey(digitsOf(a[1])) === k)).map(a => Array.from({length: 6}, (_, i) => i === 4 ? smartNote(a[i]) : (a[i] == null ? '' : a[i]))),
                 children: idx ? (idx.kids.get(k) || []) : children.filter(c => c && (safeKey(digitsOf(c[5])) === k || safeKey(digitsOf(c[8])) === k)),
-                orphans: idx ? (idx.orph.get(k) || []) : orphans.filter(orp => orp && (safeKey(digitsOf(orp[4])) === k || safeKey(digitsOf(orp[7])) === k)),
-                injured: idx ? (idx.inj.get(k) || []) : injured.filter(inj => inj && safeKey(digitsOf(inj[1])) === k),
+                orphans: idx ? (idx.orph.get(k) || []) : orphans.filter(o => o && orphanKeys(o).includes(k)),
+                injured: idx ? (idx.inj.get(k) || []) : injured.filter(inj => inj && injuryFamily(inj, injuryOwners(getDB('db_families'), children)) === k),
                 notes: anns.filter(a => !a.sec || a.sec === 'all' || String(a.sec).trim() === sec).sort((x, y) => (y.t || 0) - (x.t || 0)).slice(0, 3).map(a => ({ti: a.ti || '', tx: a.tx || '', t: a.t || 0})),
                 reqs: (idx ? (idx.logs.get(k) || []) : logs.filter(l => l.fid === k)).slice().sort((x, y) => String(y.d).localeCompare(String(x.d))).slice(0, 20).map(l => ({ty: REQ_LABEL[l.ty] || l.ty || '', d: l.d || '', st: l.st || 'pending', r: l.r || ''})),
                 msgs: famMsgsFor(f, k, children),
@@ -739,8 +814,9 @@
             const addTo = (m, k, v) => { if (!k) return; let a = m.get(k); if (!a) m.set(k, a = []); if (a[a.length - 1] !== v) a.push(v); };
             aids.forEach(a => { if (a) addTo(idx.aids, safeKey(digitsOf(a[1])), a); });
             children.forEach(c => { if (!c) return; addTo(idx.kids, safeKey(digitsOf(c[5])), c); addTo(idx.kids, safeKey(digitsOf(c[8])), c); });
-            orphans.forEach(o => { if (!o) return; addTo(idx.orph, safeKey(digitsOf(o[4])), o); addTo(idx.orph, safeKey(digitsOf(o[7])), o); });
-            injured.forEach(x => { if (x) addTo(idx.inj, safeKey(digitsOf(x[1])), x); });
+            orphans.forEach(o => { if (!o) return; orphanKeys(o).forEach(key => addTo(idx.orph,key,o)); });
+            const owners = injuryOwners(getDB('db_families'),children);
+            injured.forEach(x => { if (x) addTo(idx.inj, injuryFamily(x,owners), x); });
             logs.forEach(l => addTo(idx.logs, l.fid, l));
             const vk = (localDB.config && localDB.config.vaultPub) || '';
             const wanted = targetKeys && targetKeys.length ? new Set(targetKeys.map(safeKey)) : null;
@@ -856,8 +932,11 @@
             if(tabName === 'audit') { watchRecentAudit(); loadAudit(); }
             if(tabName === 'requests') { loadRequests(); loadComplaints(); loadPendingAddRequests(); }
             if(tabName === 'passwords') { loadPasswordsTable(); }
+            if(tabName === 'vulnerable') renderVulnerable();
+            if(tabName === 'settings' || tabName === 'families') renderSectorSettings();
             if(tabName === 'families') { loadTable('db_families', 'familiesTable', 40); }
             if(tabName === 'aids') { 
+                if(!document.getElementById('aidReceivedDate').value) document.getElementById('aidReceivedDate').value=today();
                 loadTable('db_aids', 'aidsTable', 6); 
                 // تحديث القائمة المنسدلة الذكية
                 const types = new Set();
@@ -897,9 +976,10 @@
             if (aids.length) aids.forEach(a => { aTbody.innerHTML += `<tr><td>${esc(a[3])}</td><td>${esc(a[5])}</td><td>${esc(a[4])}</td></tr>`; });
             else aTbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">لا توجد مساعدات مسجلة</td></tr>';
 
-            let orphans = getDB('db_orphans').filter(o => o && (digitsOf(o[4]) === famId || digitsOf(o[7]) === famId));
+            let orphans = getDB('db_orphans').filter(o => o && orphanKeys(o).includes(famId));
             document.getElementById('srOrphans').textContent = orphans.length ? orphans.map(o => o[0]).join(', ') : 'لا يوجد أيتام مسجلين';
-            let injured = getDB('db_injured').filter(i => i && digitsOf(i[1]) === famId);
+            const owners = injuryOwners(getDB('db_families'), getDB('db_children'));
+            let injured = getDB('db_injured').filter(i => i && injuryFamily(i,owners) === famId);
             document.getElementById('srInjured').textContent = injured.length ? injured.map(i => i[0] + ' (' + formatDateValue(i[2]) + ' - ' + i[3] + ')').join(', ') : 'لا يوجد إصابات مسجلة';
             let chronic = getDB('db_chronic').filter(ch => ch && digitsOf(ch[1]) === famId);
             document.getElementById('srChronic').textContent = chronic.length ? chronic.map(ch => ch[0] + ' - ' + ch[4]).join(' | ') : 'لا يوجد أمراض مزمنة مسجلة';
@@ -932,13 +1012,14 @@
             };
             render('childrenReqTable', 'db_children', [0, 2, 3, 9], 'لا توجد طلبات إضافة أو تعديل أطفال معلقة.');
             render('chronicReqTable', 'db_chronic', [0, 1, 4, 5], 'لا توجد طلبات أمراض مزمنة معلقة.');
+            render('orphanReqTable','db_orphans',[0,1,3],'لا توجد طلبات إضافة أيتام معلقة.');
             render('injuredReqTable', 'db_injured', [0, 1, 3, 5], 'لا توجد طلبات تسجيل إصابات معلقة.');
             updateBadgeCount();
         }
 
         function viewAddReq(dbKey, reqKey) {
             const item = (localDB[dbKey + '_reqs'] || {})[reqKey]; if (!item) return;
-            const labels = dbKey === 'db_children' ? CHILD_LABELS : dbKey === 'db_chronic' ? CHRONIC_LABELS : INJ_LABELS;
+            const labels = dbKey === 'db_children' ? CHILD_LABELS : dbKey === 'db_chronic' ? CHRONIC_LABELS : dbKey === 'db_orphans' ? EXPORT_SCHEMAS.db_orphans : INJ_LABELS;
             const p = item.payload || [], fam = famByKey(safeKey(digitsOf(item.id)));
             let warns = [];
             if (!fam) warns.push('⚠️ لا توجد أسرة بهذا الرقم في القاعدة.');
@@ -948,7 +1029,7 @@
                 const exist = getDB(dbKey).some((r, i) => r && digitsOf(r[1]) === pid && i !== editIdx);
                 if (exist) warns.push('⚠️ يوجد سجل مسجل مسبقاً بنفس رقم الهوية في هذا الكشف (تكرار).');
             }
-            let h = '<h3>' + (isEdit ? '✏ طلب تعديل بيانات طفل' : '➕ طلب إضافة طفل جديد') + ': ' + esc(p[0]) + '</h3>';
+            let h = '<h3>' + (isEdit ? '✏ طلب تعديل بيانات طفل' : REQ_LABEL[dbKey]) + ': ' + esc(p[0]) + '</h3>';
             if (warns.length) h += '<p class="warn">' + warns.map(esc).join('<br>') + '</p>';
             if (isEdit && editIdx >= 0) {
                 const o = getDB(dbKey)[editIdx] || [];
@@ -967,14 +1048,36 @@
             openModal(h);
         }
 
+        async function decideOrphan(rid, decision, reason) {
+            const path = 'db_orphans_reqs/' + rid;
+            try {
+                const lock = await rdb.ref(path).transaction(value => {
+                    if (!value) return null;
+                    if (value.decision && value.decision !== decision) return;
+                    return {...value, decision, reason:value.reason ?? reason};
+                });
+                const item = lock.snapshot.val();
+                if (!lock.committed || !item) {toast('الطلب قيد المعالجة أو حُسم مسبقاً.');return;}
+                const update = {[path]:null};
+                const row = Array.from({length:9},(_,i)=>String(item.payload?.[i] ?? ''));
+                row[9] = String(item.id);
+                if (decision === 'accepted') update['db_orphans/request-' + rid] = row;
+                update['db_reqlog/'+rid] = {...(obj('db_reqlog')[rid] || {}),fid:String(item.id),ty:'db_orphans',x:row[0],st:decision,r:item.reason,d:localDateOf(item.date)||today(),ud:today()};
+                await rdb.ref().update(update);
+                schedulePublish([item.id]); audit(decision === 'accepted' ? 'قبول طلب يتيم' : 'رفض طلب يتيم',rid);
+                toast(decision === 'accepted' ? 'تم قبول الطلب وإضافة اليتيم.' : 'تم رفض الطلب.');
+            } catch {toast('تعذّر حفظ القرار. أعد المحاولة بنفس القرار.','err');}
+        }
         function approveAddReq(dbKey, reqKey) {
+            if (dbKey === 'db_orphans') { decideOrphan(reqKey,'accepted',''); return; }
             const reqs = localDB[dbKey + '_reqs'] || {}, item = reqs[reqKey]; if (!item) return;
             const rawPayload = Array.from(item.payload || []), isEdit = isChildEdit(dbKey, rawPayload), editIdx = isEdit ? findChildIdx(rawPayload) : -1;
-            const row = isEdit ? rawPayload.slice(0, 10) : rawPayload, fam = famByKey(safeKey(digitsOf(item.id)));
+            const row = isEdit ? rawPayload.slice(0, 10) : dbKey === 'db_injured' ? rawPayload.slice(0,7) : rawPayload, fam = famByKey(safeKey(digitsOf(item.id)));
             if (!fam && !confirm('⚠️ لا توجد أسرة بهذا الرقم في القاعدة. هل تريد القبول رغم ذلك؟')) return;
             if (isEdit && editIdx < 0 && !confirm('⚠️ لم يُعثر على سجل الطفل الأصلي. هل تريد إضافته كطفل جديد؟')) return;
             const pid = digitsOf(row[1]);
             if (pid && getDB(dbKey).some((r, i) => r && digitsOf(r[1]) === pid && i !== editIdx) && !confirm('⚠️ يوجد سجل بنفس رقم الهوية مسبقاً. هل تريد المتابعة رغم التكرار؟')) return;
+            if (dbKey === 'db_injured') row[7] = item.id;
             if (dbKey === 'db_children' && fam) { if (!row[4]) row[4] = fam[1]; if (!row[5]) row[5] = fam[2]; if (!row[6]) row[6] = fam[5]; } // ربط بسجل رب الأسرة
             const db = getDB(dbKey);
             if (isEdit && editIdx >= 0) { const old = db[editIdx] || []; db[editIdx] = row.map((v, i) => (v === '' || v == null) && old[i] != null ? old[i] : v); } else db.push(row);
@@ -1010,6 +1113,7 @@
         }
 
         function finishRejectAddReq(dbKey, reqKey, why) {
+            if (dbKey === 'db_orphans') { decideOrphan(reqKey,'rejected',why); return; }
             const reqs = localDB[dbKey + '_reqs'] || {}, item = reqs[reqKey]; if (!item) return;
             delete reqs[reqKey]; rdb.ref(dbKey + '_reqs/' + reqKey).remove();
             audit('رفض طلب ' + (isChildEdit(dbKey, item.payload) ? 'تعديل بيانات طفل' : REQ_LABEL[dbKey]), (item.payload && item.payload[0] || '') + ' | أسرة ' + item.id + (why ? ' | ' + why : ''));
@@ -1139,7 +1243,7 @@
             let reqs = getDB('db_edit_requests'), tbody = document.querySelector('#requestsTable tbody'); tbody.innerHTML = '';
             reqs.forEach((req, index) => {
                 const fam = famByKey(safeKey(digitsOf(req.id)));
-                const n = fam ? diffFam(fam, Array.from({length: 40}, (_, i) => (req.newData && req.newData[i] != null ? req.newData[i] : ''))).filter(d => !d.locked).length : '?';
+                const n = fam ? diffFam(fam, Array.from({length: 40}, (_, i) => (req.newData && req.newData[i] != null ? req.newData[i] : '')).concat(['',req.newData?.[41]])).filter(d => !d.locked).length : '?';
                 tbody.innerHTML += `<tr><td>${index + 1}</td><td><strong>${esc(req.name)}</strong><div style="font-size:11px;color:#b45309;">${n} حقل معدّل</div></td><td>${esc(req.id)}</td><td style="direction:ltr;">${esc(req.date)}</td><td><button class="btn btn-blue" style="margin:0; padding:4px 8px; font-size:12px;" onclick="viewEditReq(${index})">👁 التفاصيل</button> <button class="btn btn-green" style="margin:0; padding:4px 8px; font-size:12px;" onclick="approveRequest(${index})">✔ موافقة</button> <button class="btn btn-red" style="margin:0; padding:4px 8px; font-size:12px;" onclick="rejectRequest(${index})">❌ رفض</button></td></tr>`;
             });
             if(reqs.length === 0) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">لا يوجد طلبات تعديل.</td></tr>`;
@@ -1149,12 +1253,12 @@
             const req = getDB('db_edit_requests')[index]; if (!req) return;
             const fam = famByKey(safeKey(digitsOf(req.id)));
             if (!fam) { openModal('<h3>' + esc(req.name) + '</h3><p class="warn">⚠️ الأسرة غير موجودة في القاعدة، لا يمكن مقارنة التعديلات.</p><div class="btnrow"><button class="btn btn-blue" onclick="closeModal()">إغلاق</button></div>'); return; }
-            const nd = Array.from({length: 40}, (_, i) => (req.newData && req.newData[i] != null ? req.newData[i] : ''));
+            const nd = Array.from({length: 40}, (_, i) => (req.newData && req.newData[i] != null ? req.newData[i] : '')).concat(['',req.newData?.[41]]);
             const all = diffFam(fam, nd), real = all.filter(d => !d.locked), locked = all.filter(d => d.locked && d.i !== 39);
             let h = '<h3>📝 طلب تعديل: ' + esc(fam[1]) + ' <small style="color:#64748b;">(' + esc(fam[2]) + ' - ' + esc(fam[0]) + ')</small></h3><p style="font-size:12px;color:#64748b;">تاريخ الطلب: ' + esc(req.date) + '</p>';
             if (!real.length) h += '<p class="warn">لا توجد تغييرات فعلية في هذا الطلب.</p>';
-            else h += '<table><thead><tr><th>الحقل</th><th>القيمة الحالية</th><th>القيمة المطلوبة</th></tr></thead><tbody>' + real.map(d => '<tr class="chg"><td><strong>' + esc(FAM_LABELS[d.i]) + '</strong></td><td class="old">' + esc(d.a || '—') + '</td><td class="new">' + esc(d.b || '—') + '</td></tr>').join('') + '</tbody></table>';
-            if (locked.length) h += '<p class="warn" style="margin-top:8px;">🔒 تم تجاهل محاولة تغيير حقول مقفلة: ' + locked.map(d => esc(FAM_LABELS[d.i])).join('، ') + '</p>';
+            else h += '<table><thead><tr><th>الحقل</th><th>القيمة الحالية</th><th>القيمة المطلوبة</th></tr></thead><tbody>' + real.map(d => '<tr class="chg"><td><strong>' + esc(d.i === 41 ? 'عدد المصابين' : FAM_LABELS[d.i]) + '</strong></td><td class="old">' + esc(d.a || '—') + '</td><td class="new">' + esc(d.b || '—') + '</td></tr>').join('') + '</tbody></table>';
+            if (locked.length) h += '<p class="warn" style="margin-top:8px;">🔒 تم تجاهل محاولة تغيير حقول مقفلة: ' + locked.map(d => esc(d.i === 41 ? 'عدد المصابين' : FAM_LABELS[d.i])).join('، ') + '</p>';
             const wa = waLink(fam[5], 'السلام عليكم ' + fam[1] + '، معك إدارة مخيم جسر الحياة بخصوص طلب تعديل بياناتك: ');
             h += '<div class="btnrow"><button class="btn btn-green" onclick="approveRequest(' + index + ');closeModal();">✔ موافقة</button><button class="btn btn-red" onclick="rejectRequest(' + index + ');closeModal();">❌ رفض</button>' + (wa ? '<a class="btn btn-green" style="background:#25d366;" target="_blank" rel="noopener" href="' + esc(wa) + '">💬 واتساب</a>' : '') + '<button class="btn btn-blue" onclick="showFamilyByKey(\'' + esc(safeKey(digitsOf(fam[2]))) + '\')">👁 بطاقة الأسرة</button><button class="btn btn-blue" style="background:#64748b;" onclick="closeModal()">إغلاق</button></div>';
             openModal(h);
@@ -1174,11 +1278,11 @@
             let reqs = getDB('db_edit_requests'), req = reqs[index], families = getDB('db_families'); if (!req) return;
             let fIndex = families.findIndex(f => f && safeKey(digitsOf(f[2])) === safeKey(digitsOf(req.id)));
             if (fIndex < 0) { toast('⚠️ لم يتم العثور على الأسرة في القاعدة، لا يمكن تطبيق الطلب.'); return; }
-            const old = families[fIndex], nd = Array.from({length: 40}, (_, i) => (req.newData && req.newData[i] != null ? req.newData[i] : ''));
+            const old = families[fIndex], nd = Array.from({length: 40}, (_, i) => (req.newData && req.newData[i] != null ? req.newData[i] : '')).concat(['',req.newData?.[41]]);
             const n = diffFam(old, nd).filter(d => !d.locked).length;
             if (!confirm('تطبيق ' + n + ' تعديل على بيانات أسرة: ' + old[1] + '؟')) return;
             LOCKED_IDX.forEach(i => { nd[i] = old[i] == null ? '' : old[i]; }); // القاطع والاسم والهوية والملاحظات الداخلية لا تتغير
-            if (old[40]) nd[40] = old[40]; families[fIndex] = nd; saveDB('db_families', families);
+            nd[40] = old[40] || ''; nd[41] = req.newData?.[41] == null ? old[41] ?? '' : String(req.newData[41]); if (!/^\d{0,3}$/.test(nd[41])) { toast('عدد المصابين غير صالح.','err'); return; } if(old[42] === true) nd[42] = true; families[fIndex] = nd; saveDB('db_families', families);
             audit('قبول طلب تعديل', old[1] + ' | ' + n + ' حقل');
             logReq(req.rid, req.id, 'db_edit_requests', 'accepted', '', 'تعديل بيانات الأسرة');
             reqs.splice(index, 1); saveDB('db_edit_requests', reqs); switchTab('requests');
@@ -1216,9 +1320,16 @@
             let db = getDB(dbKey), row = [];
             for (let i = 1; i <= fieldCount; i++) { let el = document.getElementById(inputPrefix + '_' + i); row.push(el ? el.value : ''); }
             row = normalizeImportedRow(dbKey, row, fieldCount);
+            if (dbKey === 'db_injured') {
+                const owner = digitsOf(document.getElementById('injuryHead').value);
+                if (owner && !famByKey(owner)) {toast('هوية رب الأسرة غير موجودة.','err');return;}
+                row[7] = owner || injuryFamily(row,injuryOwners(getDB('db_families'),getDB('db_children')));
+            }
+            if (dbKey === 'db_aids') row[4] = ('[' + document.getElementById('aidReceivedDate').value + '] ' + row[4]).trim();
+            if (dbKey === 'db_families') { row[40]=''; row[41]=document.getElementById('familyInjuredCount').value; }
             if (dbKey === 'db_children') { const w = linkChildRow(row); if (w && !confirm(w)) return; }
             if (dbKey === 'db_families' && db.some(f => f && digitsOf(f[2]) === digitsOf(row[2])) && !confirm('⚠️ توجد أسرة بنفس رقم الهوية مسبقاً. هل تريد الإضافة رغم التكرار؟')) return;
-            const portalKey = (dbKey === 'db_families' ? safeKey(digitsOf(row[2])) : dbKey === 'db_aids' ? safeKey(digitsOf(row[1])) : dbKey === 'db_children' ? safeKey(digitsOf(row[5])) || safeKey(digitsOf(row[8])) : dbKey === 'db_injured' || dbKey === 'db_chronic' ? safeKey(digitsOf(row[1])) : dbKey === 'db_orphans' ? (safeKey(digitsOf(row[4])) || safeKey(digitsOf(row[7]))) : '');
+            const portalKey = (dbKey === 'db_families' ? safeKey(digitsOf(row[2])) : dbKey === 'db_aids' ? safeKey(digitsOf(row[1])) : dbKey === 'db_children' ? safeKey(digitsOf(row[5])) || safeKey(digitsOf(row[8])) : dbKey === 'db_injured' ? row[7] : dbKey === 'db_chronic' ? safeKey(digitsOf(row[1])) : dbKey === 'db_orphans' ? null : '');
             const done = dbKey === 'db_fund' ? saveDB(dbKey, getDB(dbKey).concat([row])) : appendDBRecord(dbKey, row, portalKey);
             done.then(()=>{ audit('إضافة سجل', dbKey + ' | ' + (row[0] || row[1] || '')); if(dbKey !== 'db_fund') e.target.reset(); else { document.getElementById('fu_3').value=''; document.getElementById('fu_4').value=''; document.getElementById('fu_5').value=''; } refreshNow(); }).catch(err=>alert('❌ تعذر حفظ السجل: '+(err.message||err)));
         }
@@ -1237,10 +1348,15 @@
             const out = [], cells = [], txt = [], isFamily = dbKey === 'db_families', virt = db.length > 300;
             const rowHtml = (index, row, cv) => {
                 let h = '<tr><td>' + (index + 1) + '</td>' + (dbKey === 'db_families' ? '<td>' + esc(row[40] || '') + '</td>' : '');
-                for (let c = 0; c < cv.length; c++) h += '<td>' + esc(cv[c]) + '</td>';
+                for (let c = 0; c < cv.length; c++) {
+                    const text = esc(cv[c]);
+                    h += '<td>' + (isFamily && c===1 ? '<button class="family-name-link" onclick="showFamilyByKey(\'' + digitsOf(row[2]) + '\')">'+text+'</button>' : text) + '</td>';
+                }
                 let viewBtn = '';
                 if (dbKey === 'db_families') viewBtn = '<button class="btn-blue btn" style="' + btnS + '" onclick="showFamilyByKey(\'' + esc(safeKey(digitsOf(row[2]))) + '\')">👁 عرض</button>';
                 if (dbKey === 'db_children') { const fk = safeKey(digitsOf(row[5])) || safeKey(digitsOf(row[8])); viewBtn = '<button class="btn-blue btn" style="' + btnS + '" onclick="showFamilyByKey(\'' + esc(fk) + '\')">👁 الأسرة</button>'; }
+                if (isFamily) viewBtn += familyAidButton(row[2]);
+                if (isFamily && !isLimited) viewBtn += vulnerableButton(row);
                 return h + '<td style="white-space:nowrap">' + viewBtn
                   + '<button class="btn-blue btn" style="margin:0 4px 0 0; padding:4px 8px; font-size:11px; background:#b7791f;" onclick="editRecord(\'' + dbKey + '\', ' + index + ')">✏ تعديل</button> '
                   + '<button class="btn-red btn" style="margin:0; padding:4px 8px; font-size:11px;" onclick="deleteRecord(\'' + dbKey + '\', ' + index + ')">حذف</button></td></tr>';
@@ -1248,6 +1364,7 @@
             for (let index = 0; index < db.length; index++) {
                 const row = Array.isArray(db[index]) ? db[index] : [];
                 const cv = []; for (let c = 0; c < fieldCount; c++) cv.push(formatCellForDB(dbKey, c, row[c]));
+                if (isFamily) cv.push(String(row[41] ?? ''));
                 if (dbKey === 'db_children') cv.push(ADV.completedAge(cv[2]));
                 if (!virt) out.push(rowHtml(index, row, cv));
                 cells.push([String(index + 1)].concat(isFamily ? [String(row[40] || '')] : [], cv, [''])); txt.push(cv.join(' '));
@@ -1256,7 +1373,7 @@
             const prev = tbody.__V;
             if (virt) {
                 // جدول كبير: لا نبني كل الصفوف في الصفحة، فقط الصفحة الحالية
-                const V = tbody.__V = {n: db.length, make: i => rowHtml(i, Array.isArray(db[i]) ? db[i] : [], cells[i].slice(isFamily ? 2 : 1, -1)), cells, txt, q: prev ? prev.q : '', page: prev ? prev.page : 0, matches: [], familyFilter: isFamily ? index => db[index] && famMatch(db[index]) : null};
+                const V = tbody.__V = {n: db.length, make: i => rowHtml(i, Array.isArray(db[i]) ? db[i] : [], cells[i].slice(isFamily ? 2 : 1, -1)), cells, txt, q: prev ? prev.q : '', page: prev ? prev.page : 0, matches: [], familyFilter: isFamily ? index => db[index] && famMatch(db[index]) : dbKey === 'db_aids' ? index => matchesAidFilter(db[index]) : null};
                 const inp = searchMap[tableId] && document.getElementById(searchMap[tableId]);
                 if (inp) V.q = toLatin(String(inp.value || '')).trim().toLowerCase();
                 if (isFamily) fillQateaOptions();
@@ -1265,6 +1382,38 @@
             tbody.__V = null; tbody.innerHTML = out.join('');
             if (tableId === 'familiesTable') { fillQateaOptions(); filterFamilies(); }
             else if (searchMap[tableId]) filterSimpleTable(tableId, searchMap[tableId]);
+        }
+        function vulnerableButton(row) {
+            const marked = row[42] === true, id = digitsOf(row[2]);
+            if (!id) return '';
+            return '<button type="button" class="btn btn-blue" aria-pressed="' + marked + '" onclick="markVulnerable(\'' + id + '\',' + !marked + ',this)">' + (marked ? '★ إزالة علامة الهشاشة' : '☆ تعليم كأسرة هشّة') + '</button>';
+        }
+        async function markVulnerable(id, marked, button) {
+            if (ROLE !== 'super_admin' || button.disabled) return;
+            button.disabled = true;
+            try {
+                const result = await rdb.ref('db_families').transaction(current => {
+                    if (!current) return current;
+                    const found = Object.keys(current).filter(k => digitsOf(current[k]?.[2]) === id);
+                    if (found.length !== 1) return;
+                    current[found[0]][42] = marked;
+                    return current;
+                });
+                if (!result.committed || !result.snapshot.exists()) throw Error();
+                localDB.db_families = toRows(result.snapshot.val());
+                refreshNow();
+                toast(marked ? 'أُضيفت الأسرة لكشف الأسر الهشّة.' : 'أُزيلت العلامة عن الأسرة.');
+            } catch { toast('تعذّر حفظ العلامة. تأكّد إنّ الهوية مسجّلة مرة واحدة.', 'err'); }
+            finally { button.disabled = false; }
+        }
+        function renderVulnerable() {
+            if (ROLE !== 'super_admin') return;
+            const query = toLatin(document.getElementById('vulnerableSearch').value.trim());
+            const rows = getDB('db_families').filter(row => row?.[42] === true && [row[40],row[1],row[2]].some(v => toLatin(v || '').includes(query)));
+            document.getElementById('vulnerableRows').innerHTML = rows.map(row => '<tr>' +
+                [row[40],row[1],row[2],sectorName(row[0]),row[26]].map(v => '<td>' + esc(v ?? '') + '</td>').join('') +
+                '<td><button class="btn btn-blue" onclick="showFamilyByKey(\'' + digitsOf(row[2]) + '\')">بطاقة الأسرة</button>' + vulnerableButton(row) + '</td></tr>').join('') ||
+                '<tr><td colspan="6">لا توجد أسر مطابقة.</td></tr>';
         }
         function flushTable(id) { /* لا حاجة: الجداول الكبيرة افتراضية وتُصدَّر من البيانات */ }
 
@@ -1309,7 +1458,7 @@
             const cur=sel.value, set=new Set();
             getDB('db_families').forEach(f=>{ if(f && f[0]!=null && String(f[0]).trim()) set.add(String(f[0]).trim()); });
             const arr=Array.from(set).sort((a,b)=>a.localeCompare(b,'ar',{numeric:true}));
-            sel.innerHTML='<option value="">كل القواطع</option>'+arr.map(q=>'<option value="'+esc(q)+'">'+esc(q)+'</option>').join('');
+            sel.innerHTML='<option value="">كل القواطع</option>'+arr.map(q=>'<option value="'+esc(q)+'">'+esc(sectorName(q))+'</option>').join('');
             sel.value=set.has(cur)?cur:'';
         }
 
@@ -1338,12 +1487,17 @@
             Array.from(table.tBodies[0].rows).forEach(tr=>{tr.style.display=(!q.trim()||matchTokens(tr.textContent||'',q))?'':'none';});
         }
 
+        function matchesAidFilter(row) {
+            const date = document.getElementById('aidFilterDate').value;
+            const type = normAr(document.getElementById('aidFilterType').value.trim());
+            return (!date || aidISO(row?.[4]) === date) && (!type || normAr(String(row?.[3] || '')).includes(type));
+        }
         function filterSimpleTable(tableId, inputId) {
             const table=document.getElementById(tableId), input=document.getElementById(inputId); if(!table||!input)return;
             { const tbv=table.tBodies[0]; if(tbv&&tbv.__V){ const qv=toLatin(String(input.value||'')).trim().toLowerCase(); if(qv!==tbv.__V.q){tbv.__V.q=qv;tbv.__V.page=0;} VT.render(tbv); return; } }
             const q=toLatin(String(input.value||'')).trim().toLowerCase();
             const rows=table.tBodies[0]?Array.from(table.tBodies[0].rows):[]; let shown=0;
-            rows.forEach(tr=>{if (tr.classList.contains('adv-empty')) return; const ok=!q||matchTokens(tr.textContent||'',q);tr.style.display=ok?'':'none';if(ok)shown++;});
+            rows.forEach(tr=>{if (tr.classList.contains('adv-empty')) return; const ok=(!q||matchTokens(tr.textContent||'',q)) && (tableId!=='aidsTable' || matchesAidFilter(getDB('db_aids')[Number(tr.cells[0].textContent)-1]));tr.style.display=ok?'':'none';if(ok)shown++;});
             ADV.apply(tableId);
             let counter=document.getElementById(tableId+'Count');
             if(!counter){const box=table.parentElement&&table.parentElement.parentElement;if(box){counter=document.createElement('div');counter.id=tableId+'Count';counter.style.cssText='font-size:12px;color:#64748b;margin:7px 0;';box.insertBefore(counter,table.parentElement);}}
@@ -1427,6 +1581,7 @@
                     return;
                 }
                 let rows = getDB(dbKey).filter(Boolean);
+                if (dbKey === 'db_families') return exportFamilyCount(rows,filename);
                 if (tableId === 'fundInTable') rows = rows.filter(r => String(r[1]||'').includes('وارد'));
                 if (tableId === 'fundOutTable') rows = rows.filter(r => String(r[1]||'').includes('صادر'));
                 // التصدير يعتمد على البيانات الأصلية وليس HTML الخاص بالجدول، لذلك الناتج Excel حقيقي ونظيف.
@@ -1447,9 +1602,12 @@
                 .filter(Boolean);
         }
 
+        function exportFamilyCount(rows, filename) {
+            return exportRowsToExcel([...FAM_LABELS,'عدد المصابين'],rows.map(f=>[sectorName(f[0]),...Array.from({length:39},(_,i)=>f[i+1] ?? ''),f[41] ?? '']),filename,'الأسر');
+        }
         function exportFilteredExcel() {
             ADV.apply('familiesTable');
-            return exportRowsToExcel(FAM_LABELS, filteredFamilyRows(), 'كشف_الأسر_المفلتر.xlsx', 'الأسر المفلترة');
+            return exportFamilyCount(filteredFamilyRows(), 'كشف_الأسر_المفلتر.xlsx');
         }
 
         /* ================= تعديل أي سجل من الإدارة (كل الكشوفات) ================= */
@@ -1458,18 +1616,19 @@
             if (!row) return [];
             const k = v => safeKey(digitsOf(v));
             const ks = dbKey === 'db_families' ? [k(row[2])]
-                : dbKey === 'db_aids' || dbKey === 'db_injured' ? [k(row[1])]
+                : dbKey === 'db_aids' ? [k(row[1])] : dbKey === 'db_injured' ? [injuryFamily(row,injuryOwners(getDB('db_families'),getDB('db_children')))]
                 : dbKey === 'db_children' ? [k(row[5]), k(row[8])]
-                : dbKey === 'db_orphans' ? [k(row[4]), k(row[7])]
+                : dbKey === 'db_orphans' ? orphanKeys(row)
                 : dbKey === 'db_chronic' ? [k(row[1])] : [];
             return ks.filter(Boolean);
         }
         function editRecord(dbKey, index) {
-            const labels = EXPORT_SCHEMAS[dbKey], db = getDB(dbKey), row = db[index];
+            const labels = dbKey==='db_families' ? [...FAM_LABELS,'عدد المصابين'] : EXPORT_SCHEMAS[dbKey], db = getDB(dbKey), row = db[index];
             if (!labels || !row) { alert('تعذر العثور على السجل.'); return; }
             let h = '<h3>✏ تعديل بيانات ' + esc(EDIT_TITLES[dbKey] || 'السجل') + ' (سجل رقم ' + (index + 1) + ')</h3>'
                 + '<div style="max-height:62vh;overflow:auto;padding:4px;"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">';
             labels.forEach((l, i) => {
+                if(dbKey==='db_families' && i===40) i=41;
                 const v = formatCellForDB(dbKey, i, row[i]);
                 const long = /ملاحظ|عنوان|الدواء/.test(l);
                 h += '<div class="input-group" style="margin:0;' + (long ? 'grid-column:1/-1;' : '') + '"><label style="font-size:12px;font-weight:bold;">' + esc(l) + '</label>'
@@ -1486,6 +1645,7 @@
             const row = normalizeImportedRow(dbKey, raw, labels.length);
             // الحقول التي لا تظهر في النموذج (إن وُجدت أعمدة زائدة في السجل القديم) تبقى كما هي
             for (let i = labels.length; i < old.length; i++) row[i] = old[i];
+            if(dbKey==='db_families') {row[40]=old[40] || ''; row[41]=raw[41] ?? old[41] ?? ''; if(!/^\d{0,3}$/.test(row[41])) {toast('عدد المصابين غير صالح.','err');return;} }
             if (dbKey === 'db_families') {
                 if (!String(row[1] || '').trim() || !digitsOf(row[2])) { toast('⚠️ اسم الأسرة ورقم الهوية مطلوبان.'); return; }
                 const idChanged = digitsOf(old[2]) !== digitsOf(row[2]);
@@ -1604,7 +1764,16 @@
                             for (let j = 0; j < fieldCount; j++) out[j] = (row[j] === undefined || row[j] === null) ? '' : row[j];
                         }
                         if (!rowHasData(out)) continue;
-                        imported.push(normalizeImportedRow(dbKey, out, fieldCount));
+                        const record = normalizeImportedRow(dbKey,out,fieldCount);
+                        if (dbKey === 'db_families') {
+                            const column = header.findIndex(h => normalizeExcelHeader(h) === normalizeExcelHeader('عدد المصابين'));
+                            if (column >= 0 && raw[column] != null) {
+                                const count = toLatin(raw[column]).trim();
+                                if (!/^\d{0,3}$/.test(count)) {toast('عدد المصابين غير صالح في السطر ' + (i+1),'err');return;}
+                                record[40]=''; record[41]=count;
+                            }
+                        }
+                        imported.push(record);
                     }
                     if (!imported.length) { toast('⚠️ لم يتم العثور على سجلات صالحة للاستيراد.'); return; }
 
@@ -1820,7 +1989,7 @@ function refreshNow() {
     switchTab(a.id.split('-')[0], true);
     if (sc) sc.scrollTop = y;
 }
-const TAB_KEYS = {families: ['db_families', 'config', 'db_aids'], aids: ['db_aids', 'db_families'], injured: ['db_injured'], orphans: ['db_orphans'], children: ['db_children', 'db_families'], chronic: ['db_chronic'], fund: ['db_fund'], stock: ['db_stock', 'config'], reports: [], audit: ['db_audit'], ann: ['db_announcements'], passwords: ['db_passwords', 'pwvault', 'claims', 'db_families'], requests: ['db_edit_requests', 'db_complaints', 'db_children_reqs', 'db_chronic_reqs', 'db_injured_reqs', 'db_families', 'db_reqlog']};
+const TAB_KEYS = {families: ['db_families', 'config', 'db_aids'], aids: ['db_aids', 'db_families'], injured: ['db_injured'], orphans: ['db_orphans'], children: ['db_children', 'db_families'], chronic: ['db_chronic'], fund: ['db_fund'], stock: ['db_stock', 'config'], reports: [], audit: ['db_audit'], ann: ['db_announcements'], passwords: ['db_passwords', 'pwvault', 'claims', 'db_families'], requests: ['db_edit_requests', 'db_complaints', 'db_children_reqs', 'db_chronic_reqs', 'db_orphans_reqs', 'db_injured_reqs', 'db_families', 'db_reqlog']};
 // Keep receiving live Firebase updates, but avoid expensive DOM/table rebuilds
 // while the admin tab is hidden. The next visible frame renders current localDB.
 let _refreshPendingWhileHidden = false;
@@ -2422,7 +2591,7 @@ function loadDashboard() {
     const claimed = new Set(Object.values(obj('claims')).map(c => c && safeKey(String(c.id)))), vault = obj('pwvault');
     const isAct = f => claimed.has(fk(f)) || vault[fk(f)];
     const FC = ['الكود', 'الاسم', 'رقم الهوية', 'القاطع', 'عدد الأفراد', 'الجوال'];
-    const famRows = (list, extra) => list.map(f => ({k: fk(f), c: [f[40] || '-', f[1], f[2], f[0], f[26], f[5]].concat(extra ? [extra(f)] : [])}));
+    const famRows = (list, extra) => list.map(f => ({k: fk(f), c: [f[40] || '-', f[1], f[2], sectorName(f[0]), f[26], f[5]].concat(extra ? [extra(f)] : [])}));
     const dbList = (key, open, ck) => { const labels = (EXPORT_SCHEMAS[key] || []).slice(0, 6); return {cols: labels, open, rows: () => getDB(key).filter(Boolean).map(r => ({k: ck ? ck(r) : '', c: labels.map((_, i) => formatCellForDB(key, i, r[i]))}))}; };
     const childKey = r => safeKey(digitsOf(r[5])) || safeKey(digitsOf(r[8]));
     let n = 0; const reg = (o) => { const id = 'd' + (++n); DR[id] = o; return id; };
@@ -2470,8 +2639,8 @@ function loadDashboard() {
         const id = reg(mk(e)), max = Math.max.apply(null, entries.map(x => x[1]).concat([1]));
         return '<div class="bar-row clickable" role="button" tabindex="0" onclick="drill(\'' + id + '\')" onkeydown="if(event.key===\'Enter\')this.click()"><span class="lbl" title="' + esc(e[0]) + '">' + esc(e[0]) + '</span><span class="bar"><i style="width:' + Math.round(e[1] / max * 100) + '%"></i></span><span class="num">' + esc(e[2] != null ? e[2] : e[1]) + '</span></div>';
     }).join('');
-    const byField = (idx, title) => e => ({title: title + ': ' + e[0], cols: FC, open: 'families', rows: () => famRows(fams.filter(f => (String(f[idx] || '').trim() || 'غير محدد') === e[0]))});
-    const sec = {}; fams.forEach(f => { const k = String(f[0] || '').trim() || 'غير محدد'; sec[k] = sec[k] || {f: 0, m: 0}; sec[k].f++; sec[k].m += num(f[26]); });
+    const byField = (idx, title) => e => ({title: title + ': ' + e[0], cols: FC, open: 'families', rows: () => famRows(fams.filter(f => (String(idx === 0 ? sectorName(f[0]) : f[idx] || '').trim() || 'غير محدد') === e[0]))});
+    const sec = {}; fams.forEach(f => { const k = sectorName(f[0]).trim() || 'غير محدد'; sec[k] = sec[k] || {f: 0, m: 0}; sec[k].f++; sec[k].m += num(f[26]); });
     const secE = Object.entries(sec).sort((a, b) => b[1].f - a[1].f).map(e => [e[0], e[1].f, e[1].f + ' أسرة / ' + e[1].m + ' فرد']);
     const groups = [['يوم - سنتين', 14, 15], ['3 - 6', 16, 17], ['7 - 12', 18, 19], ['13 - 17', 20, 21], ['18 - 60', 22, 23], ['فوق 60', 24, 25]];
     const sum = i => fams.reduce((s, f) => s + num(f[i]), 0);
@@ -2745,6 +2914,15 @@ async function chExecute() {
         p.reqs.forEach(i => { reqs[i].id = p.newId; reqs[i].name = p.newName; });
     });
     const up = {db_families: fams, db_aids: aids, db_children: kids, db_edit_requests: reqs};
+    const replacements = new Map(sel.map(p => [digitsOf(p.oldId), digitsOf(p.newId)]));
+    for (const [name,slot] of [['db_injured',7],['db_orphans',9]]) {
+        const linked = cp(getDB(name)); let changed = false;
+        for (const row of linked) {
+            const next = replacements.get(digitsOf(row?.[slot]));
+            if (next) { row[slot]=next; changed=true; }
+        }
+        if (changed) up[name]=linked;
+    }
     sel.forEach(p => { const o = safeKey(p.oldId), uid = claimUidOf(o); up['portal/' + o] = null; up['qmeta/' + o] = null; up['verify/' + o] = null; up['pwvault/' + o] = null; if (uid) up['claims/' + uid] = null; });
     const b = document.getElementById('chGo'); if (b) b.classList.add('is-loading');
     rdb.ref().update(up).then(() => {
@@ -2841,7 +3019,10 @@ function autoCodes() {
 function openCodesTool() {
     if (isLimited) { alert('⛔ هذه الأداة للمدير العام فقط.'); return; }
     const fams = getDB('db_families').filter(Boolean), saved = codeLetters() || {}, groups = {}, used = new Set();
-    fams.forEach(f => { const k = secNorm(f), g = groups[k] = groups[k] || {n: 0, coded: 0, labels: {}}; g.n++; if (CODE_RE.test(String(f[40] || ''))) g.coded++; const lb = String(f[0] || '').trim(); g.labels[lb] = (g.labels[lb] || 0) + 1; });
+    fams.forEach(f => { const k = secNorm(f), g = groups[k] = groups[k] || {n: 0, coded: 0, labels: {}}; g.n++; if (CODE_RE.test(String(f[40] || ''))) g.coded++; const lb = sectorName(f[0]).trim(); g.labels[lb] = (g.labels[lb] || 0) + 1; });
+    for (const key of [...Object.keys(saved), ...Object.values(localDB.config?.sectorNames || {}).map(s=>normAr(s.key))]) {
+        if (!Object.hasOwn(groups,key)) groups[key] = {n:0,coded:0,labels:{[sectorName(Object.values(localDB.config?.sectorNames || {}).find(s=>normAr(s.key)===key)?.key || key)]:1}};
+    }
     Object.keys(groups).forEach(k => { if (saved[k]) used.add(saved[k]); });
     const rows = Object.keys(groups).sort((a, b) => groups[b].n - groups[a].n).map(k => {
         const g = groups[k], label = Object.keys(g.labels).sort((a, b) => g.labels[b] - g.labels[a])[0] || 'بدون قاطع';
@@ -3112,7 +3293,7 @@ function repExtra() {
     if (type !== 'aids') { box.innerHTML = ''; return; }
     const aids = getDB('db_aids').filter(Array.isArray), uniq = i => Array.from(new Set(aids.map(a => String(a[i] || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ar'));
     const opt = (arr, all) => '<option value="">' + all + '</option>' + arr.map(x => '<option value="' + esc(x) + '">' + esc(x) + '</option>').join('');
-    box.innerHTML = '<div class="input-group"><label>القاطع</label><select id="rp_sector">' + opt(uniq(2), 'كل القواطع') + '</select></div><div class="input-group"><label>نوع المساعدة</label><select id="rp_atype">' + opt(uniq(3), 'كل الأنواع') + '</select></div>';
+    box.innerHTML = '<div class="input-group"><label>القاطع</label><select id="rp_sector">' + '<option value="">كل القواطع</option>' + uniq(2).map(k=>'<option value="'+esc(k)+'">'+esc(sectorName(k))+'</option>').join('') + '</select></div><div class="input-group"><label>نوع المساعدة</label><select id="rp_atype">' + opt(uniq(3), 'كل الأنواع') + '</select></div>';
 }
 function repPeriod() {
     const mode = document.getElementById('rp_mode').value, now = new Date(); let from = '', to = '', label = 'كل الفترات';
@@ -3138,10 +3319,10 @@ function repAids(P) {
     sel.sort((x, y) => x.iso.localeCompare(y.iso));
     const fam = new Set(sel.map(s => digitsOf(s.a[1])).filter(Boolean)), qty = sel.reduce((n, s) => n + (stockNum(s.a[5]) || 1), 0);
     const grp = (keyFn) => { const m = {}; sel.forEach(s => { const k = keyFn(s.a) || 'غير محدد'; (m[k] = m[k] || {n: 0, q: 0, f: new Set()}); m[k].n++; m[k].q += stockNum(s.a[5]) || 1; m[k].f.add(digitsOf(s.a[1])); }); return Object.entries(m).sort((a, b) => b[1].n - a[1].n); };
-    const R = {title: 'تقرير المساعدات الموزعة', sub: P.label + (fs ? ' — قاطع: ' + fs : '') + (ft ? ' — نوع: ' + ft : ''), tiles: [{l: 'عدد المساعدات', v: sel.length, t: 't-lav', i: '📦'}, {l: 'أسر مستفيدة', v: fam.size, t: 't-mint', i: '🏠'}, {l: 'إجمالي الكمية', v: fmtQ(qty), t: 't-sky', i: '🔢'}, {l: 'أنواع المساعدات', v: grp(a => String(a[3] || '').trim()).length, t: 't-pink', i: '🏷️'}], sections: [], notes: []};
+    const R = {title: 'تقرير المساعدات الموزعة', sub: P.label + (fs ? ' — قاطع: ' + sectorName(fs) : '') + (ft ? ' — نوع: ' + ft : ''), tiles: [{l: 'عدد المساعدات', v: sel.length, t: 't-lav', i: '📦'}, {l: 'أسر مستفيدة', v: fam.size, t: 't-mint', i: '🏠'}, {l: 'إجمالي الكمية', v: fmtQ(qty), t: 't-sky', i: '🔢'}, {l: 'أنواع المساعدات', v: grp(a => String(a[3] || '').trim()).length, t: 't-pink', i: '🏷️'}], sections: [], notes: []};
     R.sections.push({h: 'حسب نوع المساعدة', cols: ['النوع', 'عدد المساعدات', 'الكمية', 'عدد الأسر'], rows: grp(a => String(a[3] || '').trim()).map(([k, v]) => [k, v.n, v.q, v.f.size]), bar: 1});
-    R.sections.push({h: 'حسب القاطع', cols: ['القاطع', 'عدد المساعدات', 'عدد الأسر'], rows: grp(a => String(a[2] || '').trim()).map(([k, v]) => [k, v.n, v.f.size]), bar: 1});
-    R.sections.push({h: 'تفاصيل المساعدات', cols: ['التاريخ', 'الكود', 'الاسم', 'الهوية', 'القاطع', 'النوع', 'الكمية'], rows: sel.map(s => { const f = fm[digitsOf(s.a[1])]; return [s.iso ? formatDateValue(s.iso) : 'بلا تاريخ', (f && f[40]) || s.a[6] || '', s.a[0], s.a[1], s.a[2], s.a[3], stockNum(s.a[5]) || 1]; }), limit: 100});
+    R.sections.push({h: 'حسب القاطع', cols: ['القاطع', 'عدد المساعدات', 'عدد الأسر'], rows: grp(a => sectorName(a[2]).trim()).map(([k, v]) => [k, v.n, v.f.size]), bar: 1});
+    R.sections.push({h: 'تفاصيل المساعدات', cols: ['التاريخ', 'الكود', 'الاسم', 'الهوية', 'القاطع', 'النوع', 'الكمية'], rows: sel.map(s => { const f = fm[digitsOf(s.a[1])]; return [s.iso ? formatDateValue(s.iso) : 'بلا تاريخ', (f && f[40]) || s.a[6] || '', s.a[0], s.a[1], sectorName(s.a[2]), s.a[3], stockNum(s.a[5]) || 1]; }), limit: 100});
     const amb = sel.filter(s => /^\s*\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2}\s*$/.test(toLatin(String(s.a[4] || '')))).length;
     if (amb) R.notes.push('ℹ️ ' + amb + ' سجل تاريخه مكتوب بخانتين للسنة (مثل 10/5/26) وفُسِّر بصيغة شهر/يوم/سنة (صيغة Excel الأمريكية). تأكد أن هذا يطابق كشفكم.');
     if (undated.length && !P.all) { R.notes.push('⚠️ ' + undated.length + ' سجل مساعدات ليس له تاريخ مقروء، لذلك لا يدخل في أي تقرير محدد بفترة. التاريخ يُقرأ من عمود «ملاحظة» في كشف الاستلام.'); R.sections.push({h: 'سجلات بلا تاريخ (غير محتسبة)', cols: ['الاسم', 'الهوية', 'القاطع', 'النوع', 'الملاحظة'], rows: undated.map(a => [a[0], a[1], a[2], a[3], a[4]]), limit: 30, noPrint: true}); }
@@ -3314,7 +3495,7 @@ function aidISO(v) {
 /* ---------- توزيع جماعي على قاطع ---------- */
 let _ba = null;
 function baSectors() {
-    const m = {}; getDB('db_families').filter(Boolean).forEach(f => { const k = secNorm(f), lb = String(f[0] || '').trim() || 'بدون قاطع'; (m[k] = m[k] || {n: 0, l: {}}).n++; m[k].l[lb] = (m[k].l[lb] || 0) + 1; });
+    const m = {}; getDB('db_families').filter(Boolean).forEach(f => { const k = secNorm(f), lb = sectorName(f[0]).trim() || 'بدون قاطع'; (m[k] = m[k] || {n: 0, l: {}}).n++; m[k].l[lb] = (m[k].l[lb] || 0) + 1; });
     return Object.keys(m).map(k => ({k, n: m[k].n, label: Object.keys(m[k].l).sort((a, b) => m[k].l[b] - m[k].l[a])[0]})).sort((a, b) => b.n - a.n);
 }
 function openBulkAid(preSector) {
@@ -3383,7 +3564,7 @@ document.addEventListener('DOMContentLoaded', () => {
    صندوق الوارد والطلبات: استلام موثوق + إظهار ما لم يصل + فحص وإصلاح
    ========================================================================== */
 const _inboxFail = {};
-const INBOX_TYPES = {db_edit_requests: 'تعديل بيانات الأسرة', db_complaints: 'شكوى / طلب', db_children: 'إضافة أو تعديل طفل', db_chronic: 'مريض مزمن', db_injured: 'إصابة'};
+const INBOX_TYPES = {db_edit_requests: 'تعديل بيانات الأسرة', db_complaints: 'شكوى / طلب', db_children: 'إضافة أو تعديل طفل', db_chronic: 'مريض مزمن', db_injured: 'إصابة', db_orphans: 'إضافة يتيم'};
 const withTO = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('انتهت مهلة الاتصال')), ms || 25000))]);
 const inboxItems = () => { const out = []; const ib = localDB.inbox || {}; Object.keys(ib).forEach(fid => Object.keys(ib[fid] || {}).forEach(k => { if (ib[fid][k]) out.push({fid, k, it: ib[fid][k], path: fid + '/' + k}); })); return out; };
 
@@ -3402,13 +3583,13 @@ async function ingestInbox(inbox, force) {
             const tx = await withTO(ref.transaction(current => current ? null : undefined));
             if (!tx.committed) continue; claimed = true;
             const it = original, rid = fid + '_' + k; let title = '';
-            if (['db_children', 'db_chronic', 'db_injured'].includes(it.type)) {
+            if (['db_children', 'db_chronic', 'db_injured', 'db_orphans'].includes(it.type)) {
                 await withTO(rdb.ref(it.type + '_reqs/' + rid).set({id: fid, payload: it.payload, date: it.date || ''}));
                 if (!localDB[it.type + '_reqs']) localDB[it.type + '_reqs'] = {};
                 localDB[it.type + '_reqs'][rid] = {id: fid, payload: it.payload, date: it.date || ''};
                 title = (it.type === 'db_children' && it.payload[10] === 'تعديل' ? 'تعديل بيانات طفل: ' : '') + String(it.payload[0] || '');
             } else if (it.type === 'db_edit_requests') {
-                const payload = Object.assign({}, it.payload, {rid});
+                const payload = Object.assign({}, it.payload, {rid, id:fid});
                 await withTO(rdb.ref('db_edit_requests').transaction(cur => {
                     const arr = cur == null ? [] : (Array.isArray(cur) ? cur.slice() : Object.keys(cur).sort((a, b) => a - b).map(x => cur[x]));
                     if (!arr.some(x => x && x.rid === rid)) arr.push(payload); return arr;
@@ -3493,7 +3674,7 @@ function loadRequests() {
     const reqs = getDB('db_edit_requests'), tbody = document.querySelector('#requestsTable tbody'); if (!tbody) return;
     const rows = reqs.map((req, index) => {
         if (!req || typeof req !== 'object') return '';
-        let n = '?'; try { const fam = famByKey(safeKey(digitsOf(req.id))); if (fam) n = diffFam(fam, Array.from({length: 40}, (_, i) => (req.newData && req.newData[i] != null ? req.newData[i] : ''))).filter(d => !d.locked).length; } catch (e) { n = '?'; }
+        let n = '?'; try { const fam = famByKey(safeKey(digitsOf(req.id))); if (fam) n = diffFam(fam, Array.from({length: 40}, (_, i) => (req.newData && req.newData[i] != null ? req.newData[i] : '')).concat(['',req.newData?.[41]])).filter(d => !d.locked).length; } catch (e) { n = '?'; }
         return `<tr><td>${index + 1}</td><td><strong>${esc(req.name || '(بدون اسم)')}</strong><div style="font-size:11px;color:#b45309;">${n} حقل معدّل</div></td><td>${esc(req.id)}</td><td style="direction:ltr;">${esc(req.date)}</td><td><button class="btn btn-blue" style="margin:0; padding:4px 8px; font-size:12px;" onclick="viewEditReq(${index})">👁 التفاصيل</button> <button class="btn btn-green" style="margin:0; padding:4px 8px; font-size:12px;" onclick="approveRequest(${index})">✔ موافقة</button> <button class="btn btn-red" style="margin:0; padding:4px 8px; font-size:12px;" onclick="rejectRequest(${index})">❌ رفض</button></td></tr>`;
     }).join('');
     tbody.innerHTML = rows || `<tr><td colspan="5" style="text-align:center;">لا يوجد طلبات تعديل.</td></tr>`;
@@ -3528,7 +3709,7 @@ function taskList() {
     const T = [], fams = getDB('db_families').filter(Boolean);
     const pend = getDB('db_edit_requests').filter(r => r && typeof r === 'object').length; if (pend) T.push(['📝', pend + ' طلب تعديل بيانات بانتظار قرارك', "switchTab('requests')", 'مراجعة']);
     const comp = getDB('db_complaints').filter(c => Array.isArray(c) && !c[7]).length; if (comp) T.push(['💬', comp + ' شكوى أو طلب جديد', "switchTab('requests')", 'عرض']);
-    const adds = ['db_children_reqs', 'db_chronic_reqs', 'db_injured_reqs'].reduce((n, k) => n + Object.keys(obj(k)).length, 0); if (adds) T.push(['➕', adds + ' طلب إضافة (أطفال/مرضى/إصابات)', "switchTab('requests')", 'عرض']);
+    const adds = ['db_children_reqs', 'db_chronic_reqs', 'db_orphans_reqs', 'db_injured_reqs'].reduce((n, k) => n + Object.keys(obj(k)).length, 0); if (adds) T.push(['➕', adds + ' طلب إضافة (أطفال/مرضى/إصابات)', "switchTab('requests')", 'عرض']);
     const inb = typeof inboxItems === 'function' ? inboxItems().length : 0; if (inb) T.push(['📥', inb + ' طلب في صندوق الوارد لم يُستلم', 'rqIngestNow()', 'استلام الآن']);
     const miss = typeof reqMissing === 'function' ? reqMissing().length : 0; if (miss) T.push(['⚠️', miss + ' طلب يظهر للمستفيد ولا نص له عندك', 'openReqCheck()', 'فحص وإصلاح']);
     const nocode = fams.filter(f => !/^[a-z]\d{3,4}$/i.test(String(f[40] || ''))).length; if (nocode && !isLimited) T.push(['🏷️', nocode + ' أسرة بلا كود', 'openCodesTool()', 'توليد الأكواد']);

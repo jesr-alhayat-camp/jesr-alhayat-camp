@@ -17,6 +17,19 @@
     });
     system.addEventListener('change', applyTheme);
 
+    const startTab = document.getElementById('startTab');
+    try {
+        const saved = localStorage.getItem('jesr-admin-start');
+        if (Array.from(startTab.options).some(o => o.value === saved)) startTab.value = saved;
+    } catch {}
+    startTab.onchange = () => { try {localStorage.setItem('jesr-admin-start',startTab.value);} catch {} };
+    const spacing = document.getElementById('rowSpacing');
+    try { if (localStorage.getItem('jesr-row-spacing') === 'compact') spacing.value='compact'; } catch {}
+    document.documentElement.dataset.rowSpacing = spacing.value;
+    spacing.onchange = () => {
+        document.documentElement.dataset.rowSpacing = spacing.value;
+        try { localStorage.setItem('jesr-row-spacing',spacing.value); } catch {}
+    };
     const form = document.getElementById('adminPasswordForm');
     const status = document.getElementById('adminPasswordStatus');
     const button = form.querySelector('button');

@@ -138,7 +138,8 @@
             
             // الأيتام والمصابين
             T('dashOrphans', portalOrphans.length ? portalOrphans.map(o=>o[0]).join(', ') : 'لا يوجد أيتام مسجلين');
-            T('dashInjured', portalInjured.length ? portalInjured.map(i=>i[0] + ' (' + i[3] + ')').join(', ') : 'لا يوجد إصابات مسجلة');
+            T('reportedInjuries',currentFamilyRow[41] === '' || currentFamilyRow[41] == null ? 'غير محدد' : currentFamilyRow[41]);
+            T('dashInjured', portalInjured.length ? portalInjured.map(i=>[i[0],i[2],i[3],i[5]].filter(Boolean).join(' · ')).join(', ') : 'لا يوجد إصابات مسجلة');
 
             const nm=a=>a[3]==='غير ذلك'?a[4]:a[3];
             const banner=document.getElementById('aidDetailsText');
@@ -174,7 +175,7 @@
         /* ===== ثوابت التواصل ===== */
         const CAMP_CONTACT_NAME='مروان فؤاد حمد', CAMP_PHONE_INTL='972599885727', CAMP_PHONE_SHOW='0599885727', CAMP_GROUP='https://chat.whatsapp.com/HAFVDxl8m9I74ofYwM1yOx?s=cl&p=a&iam=2';
         const FAM_LABELS=['القاطع','الاسم رباعي','رقم الهوية','الجنس','تاريخ الميلاد','رقم الجوال','رقم الجوال الثاني','الحالة الاجتماعية','اسم الزوجة الأولى','هوية الزوجة الأولى','ميلاد الزوجة الأولى','اسم الزوجة الثانية','هوية الزوجة الثانية','ميلاد الزوجة الثانية','(يوم-سنتين) ذكر','(يوم-سنتين) أنثى','(3-6 سنوات) ذكر','(3-6 سنوات) أنثى','(7-12 سنة) ذكر','(7-12 سنة) أنثى','(13-17 سنة) ذكر','(13-17 سنة) أنثى','(18-60 سنة) ذكر','(18-60 سنة) أنثى','(فوق 60) ذكر','(فوق 60) أنثى','العدد الكلي للأفراد','عنوان السكن الأصلي','المحافظة الأصلية','عنوان السكن الحالي','المحافظة الحالية','المسكن','الحالة','المهنة','نوع الضرر','ذوو الإعاقة','أمراض مزمنة','تعيل الأسرة امرأة؟','امرأة مرضعة/حامل؟','ملاحظات'];
-        const REQ_TYPES={db_edit_requests:'تعديل بيانات',db_children:'إضافة / تعديل طفل',db_chronic:'إضافة مريض مزمن',db_injured:'تسجيل إصابة',db_complaints:'شكوى / طلب'};
+        const REQ_TYPES={db_edit_requests:'تعديل بيانات',db_children:'إضافة / تعديل طفل',db_chronic:'إضافة مريض مزمن',db_injured:'تسجيل إصابة',db_orphans:'إضافة يتيم',db_complaints:'شكوى / طلب'};
         const ST_TXT={pending:'قيد المراجعة',accepted:'تمت الموافقة',rejected:'مرفوض',answered:'تم الرد',sent:'أُرسل (بانتظار استلام الإدارة)'};
 
         function notify(msg){const t=document.getElementById('toast'),m=String(msg),bad=/^\s*[❌⛔⚠⏳]/u.test(m);t.textContent=m;t.className=/^\s*[❌⛔]/u.test(m)?'err':bad?'warn':'';void t.offsetWidth;t.classList.add('show');clearTimeout(notify._t);notify._t=setTimeout(()=>t.classList.remove('show'),bad?6000:3800);}
@@ -315,6 +316,7 @@
             document.getElementById('edit_a_25').value = currentFamilyRow[24] || '0';
             document.getElementById('edit_a_26').value = currentFamilyRow[25] || '0';
 
+            document.getElementById('editInjuredCount').value = currentFamilyRow[41] ?? '';
             document.getElementById('edit_members').value = currentFamilyRow[26] || '';
             document.getElementById('edit_orig_addr').value = currentFamilyRow[27] || '';
             document.getElementById('edit_orig_gov').value = currentFamilyRow[28] || '';
@@ -366,6 +368,8 @@
             updatedRow[24] = document.getElementById('edit_a_25').value;
             updatedRow[25] = document.getElementById('edit_a_26').value;
 
+            updatedRow[40] = '';
+            updatedRow[41] = document.getElementById('editInjuredCount').value;
             updatedRow[26] = document.getElementById('edit_members').value;
             updatedRow[27] = document.getElementById('edit_orig_addr').value;
             updatedRow[28] = document.getElementById('edit_orig_gov').value;
@@ -382,6 +386,7 @@
             /* الحقول المقفلة: القاطع، الاسم، رقم الهوية (والملاحظات الداخلية للإدارة) */
             updatedRow[0]=currentFamilyRow[0]; updatedRow[1]=currentFamilyRow[1]; updatedRow[2]=currentFamilyRow[2]; updatedRow[39]=currentFamilyRow[39]||'';
             const chg=famDiff(currentFamilyRow,updatedRow);
+            if(String(currentFamilyRow[41] ?? '') !== updatedRow[41]) chg.push(['عدد المصابين',currentFamilyRow[41] ?? 'غير محدد',updatedRow[41]]);
             if(!chg.length){notify('ℹ️ لم تقم بتغيير أي بيانات.');return;}
             const ph1=digitsOf(updatedRow[5]); if(ph1&&ph1.length<9){notify('رقم الجوال غير صحيح.');return;}
             if(!confirm('سيتم إرسال التعديلات التالية للإدارة للمراجعة:\n\n'+chg.map(c=>'• '+c[0]+': '+c[1]+'  ←  '+c[2]).join('\n'))) return;
@@ -427,6 +432,21 @@
               .catch(()=>notify('❌ تعذر الإضافة'));
         });
 
+        document.getElementById('orphanRequest').addEventListener('submit', async event => {
+            event.preventDefault();
+            const form = event.target, fields = new FormData(form);
+            const read = k => String(fields.get(k) || '').trim();
+            const row = [read('childName'),digitsOf(read('childId')),read('birth'),read('guardian'),digitsOf(read('guardianId')),read('death'),read('parentName'),digitsOf(read('parentId')),currentFamilyRow[5] || ''];
+            if (![row[1],row[4]].every(id => /^\d{9}$/.test(id)) || (row[7] && !/^\d{9}$/.test(row[7]))) { notify('❌ تأكّد من أرقام الهوية.'); return; }
+            const button = form.querySelector('[type=submit]');
+            if (button.disabled) return;
+            button.disabled = true;
+            try {
+                await rdb.ref('inbox/'+currentId).push({type:'db_orphans', date:new Date().toISOString(), payload:row});
+                form.reset(); noteSent('إضافة يتيم'); switchView('dashboard'); notify('تم إرسال طلب إضافة يتيم للمراجعة.');
+            } catch { notify('❌ تعذّر إرسال الطلب.'); }
+            finally { button.disabled = false; }
+        });
         document.getElementById('addInjuredForm').addEventListener('submit', function(e) {
             e.preventDefault();
             if(!checkId('i_id',true)||!checkDob('i_dob')) return;
@@ -682,7 +702,7 @@ function fixDates() {
         + '<main id="appMain"></main></div><nav id="bottomNav" aria-label="التنقل">' + nav(TABS) + '</nav>';
     dash.parentNode.insertBefore(shell, dash);
     const main = $id('appMain');
-    ['dashboardSection', 'editDataSection', 'editChildSection', 'changePwdSection', 'addChildSection', 'addChronicSection', 'addInjuredSection', 'addComplaintSection', 'helpSection'].forEach(id => { const el = $id(id); if (el) main.appendChild(el); });
+    ['dashboardSection', 'editDataSection', 'editChildSection', 'changePwdSection', 'addChildSection', 'addChronicSection', 'addInjuredSection', 'addOrphanSection', 'addComplaintSection', 'helpSection'].forEach(id => { const el = $id(id); if (el) main.appendChild(el); });
 
     const act = k => { $id('userMenu').classList.add('hidden'); if (k === 'help') switchView('help'); else if (k === 'pwd') switchView('changePwd'); else if (k === 'out') $id('logoutBtn').click(); else showTab(k); };
     shell.addEventListener('click', e => { const b = e.target.closest('.nv,[data-m]'); if (b) act(b.dataset.k || b.dataset.m); });

@@ -89,7 +89,7 @@
             <div class="card" style="border-top-color: #8b5cf6;">
                 <h3 style="color: #7c3aed; margin-bottom: 10px;">🛡️ الأيتام والمصابون المسجلون</h3>
                 <p><strong>الأيتام:</strong> <span id="dashOrphans">-</span></p>
-                <p><strong>المصابون:</strong> <span id="dashInjured">-</span></p>
+                <p><strong>عدد المصابين المُبلّغ عنه:</strong> <span id="reportedInjuries">—</span></p><p><strong>المصابون:</strong> <span id="dashInjured">-</span></p>
             </div>
 
             <!-- سجل المساعدات -->
@@ -123,6 +123,7 @@
                 <div class="action-grid">
                     <button class="btn-success" onclick="switchView('addChild')">👶 إضافة طفل</button>
                     <button class="btn-primary" onclick="switchView('addChronic')">💊 إضافة مريض</button>
+                    <button class="btn-primary" onclick="switchView('addOrphan')">طلب إضافة يتيم</button>
                     <button class="btn-danger" onclick="switchView('addInjured')">🩹 تسجيل إصابة</button>
                     <button class="btn-purple" onclick="switchView('addComplaint')">📝 تقديم شكوى أو طلب</button>
                     <button class="btn-warning" onclick="switchView('changePwd')">🔒 تغيير كلمة المرور</button>
@@ -173,6 +174,7 @@
                     <div class="input-group"><label>(18 - 60 سنة) أنثى</label><input type="number" id="edit_a_24" min="0"></div>
                     <div class="input-group"><label>(فوق 60 سنة) ذكر</label><input type="number" id="edit_a_25" min="0"></div>
                     <div class="input-group"><label>(فوق 60 سنة) أنثى</label><input type="number" id="edit_a_26" min="0"></div>
+                    <div class="input-group"><label for="editInjuredCount">عدد المصابين في الأسرة</label><input id="editInjuredCount" type="number" min="0" max="999" step="1"></div>
                     <div class="input-group"><label>العدد الكلي للأفراد</label><input type="number" id="edit_members" min="1" required></div>
                     
                     <h3 class="section-title">بيانات السكن والحالة</h3>
@@ -304,6 +306,10 @@
             </form>
         </div>
 
+        <section id="addOrphanSection" class="card-box hidden"><h2>طلب إضافة يتيم</h2><form id="orphanRequest"><div class="form-grid">
+<label>اسم اليتيم<input name="childName" required maxlength="100"></label><label>هوية اليتيم<input name="childId" inputmode="numeric" maxlength="9" required></label><label>تاريخ الميلاد<input type="date" name="birth" required></label>
+<label>اسم الوصي<input name="guardian" required></label><label>هوية الوصي<input name="guardianId" inputmode="numeric" maxlength="9" required></label><label>اسم الأب أو الأم المتوفّى<input name="parentName" required></label><label>هوية المتوفّى (اختياري)<input name="parentId" inputmode="numeric" maxlength="9"></label><label>تاريخ الوفاة (اختياري)<input type="date" name="death"></label></div>
+<button type="submit" class="btn-primary">إرسال للمراجعة</button><button type="button" onclick="switchView('dashboard')">رجوع</button></form></section>
         <div id="addInjuredSection" class="card-box hidden">
             <h2 style="color: #ef4444; margin-bottom: 15px;">🩹 تسجيل حالة إصابة</h2>
             <form id="addInjuredForm">
@@ -353,6 +359,6 @@
 
     <script defer src="/assets/startup-r3.js"></script>
     <script defer src="/assets/camp-recovery-config.js?v=jesr-live-20261125"></script>
-    <script defer src="/assets/portal-r3.js?v=jesr-family-accounts-20261125"></script>
+    <script defer src="/assets/portal-r3.js?v=jesr-registers-20261127"></script>
 </body>
 </html>

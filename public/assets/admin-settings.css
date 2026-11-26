@@ -1,3 +1,5 @@
+html[data-row-spacing=compact] .modern-admin .table-responsive :is(td,th) { padding: 4px 7px !important; }
+.family-name-link { border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 #settings-tab .card { max-width: 40rem; }
 #settings-tab h2 { margin: 0 0 1rem; font-size: 1.15rem; }
 #settings-tab label { display: block; margin: .9rem 0 .3rem; }

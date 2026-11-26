@@ -19,8 +19,8 @@
     
     <link rel="stylesheet" href="/assets/admin-r3.css">
     <link rel="stylesheet" href="/assets/camp-admin-modern.css">
-    <link rel="stylesheet" href="/assets/admin-settings.css">
-    <script defer src="/assets/admin-settings.js"></script>
+    <link rel="stylesheet" href="/assets/admin-settings.css?v=20261127">
+    <script defer src="/assets/admin-settings.js?v=20261127"></script>
 </head>
 <body class="modern-admin">
     <div id="syncLoader" aria-hidden="true" style="display:none"><i></i></div>
@@ -49,6 +49,7 @@
                 <li id="nav-quality" onclick="switchTab('quality')" style="background-color:#334155;">🧪 فحص جودة البيانات</li>
                 <li id="nav-passwords" onclick="switchTab('passwords')" style="background-color: #0f172a; color: #38bdf8;">🔑 إدارة حسابات العائلات</li>
                 <li id="nav-families" class="active" onclick="switchTab('families')">👥 قاعدة الأسر</li>
+                <li id="nav-vulnerable" onclick="switchTab('vulnerable')">الأسر الهشّة</li>
                 <li id="nav-aids" onclick="switchTab('aids')">📦 كشف الاستلام</li>
                 <li id="nav-injured" onclick="switchTab('injured')">🩹 كشف المصابين</li>
                 <li id="nav-orphans" onclick="switchTab('orphans')">👦 كشف الأيتام</li>
@@ -132,12 +133,14 @@
             </div>
 
             <!-- سجل العمليات -->
+            <section class="tab-content" id="vulnerable-tab"><div class="header"><h1>الأسر الهشّة</h1></div><div class="card"><label for="vulnerableSearch">بحث بالاسم أو الهوية أو الكود</label><input id="vulnerableSearch" oninput="renderVulnerable()"><div class="table-responsive"><table><thead><tr><th>الكود</th><th>الاسم</th><th>الهوية</th><th>القاطع</th><th>الأفراد</th><th>الإجراء</th></tr></thead><tbody id="vulnerableRows"></tbody></table></div></div></section>
             <section id="settings-tab" class="tab-content" aria-labelledby="settingsTitle">
                 <div class="header"><h1 id="settingsTitle">الإعدادات</h1></div>
                 <div class="card"><h2>مظهر لوحة الإدارة</h2>
                     <label for="adminTheme">المظهر على هذا الجهاز</label>
                     <select id="adminTheme"><option value="light">فاتح</option><option value="dark">ليلي</option><option value="system">حسب إعدادات الجهاز</option></select>
                 </div>
+                <div class="card" id="sectorSettings" hidden><h2>القواطع</h2><form onsubmit="saveSectorName(event)"><label for="sectorKey">القاطع</label><select id="sectorKey" onchange="document.getElementById('sectorLabel').value=this.value?sectorName(this.value):''"></select><label for="sectorLabel">اسم القاطع</label><input id="sectorLabel" maxlength="60" required><button class="btn btn-green">حفظ اسم القاطع</button></form><button type="button" class="btn btn-blue" onclick="openCodesTool()">إدارة حروف أكواد الأسر</button></div><div class="card"><h2>تفضيلات العمل على هذا الجهاز</h2><label for="startTab">صفحة البداية بعد الدخول</label><select id="startTab"><option value="dashboard">لوحة المؤشرات</option><option value="families">كشف الأسر</option><option value="requests">الطلبات</option><option value="aids">المساعدات</option></select><label for="rowSpacing">تباعد صفوف الكشوفات</label><select id="rowSpacing"><option value="normal">عادي</option><option value="compact">متقارب</option></select></div>
                 <div class="card"><h2>تغيير كلمة سر حسابي</h2>
                     <form id="adminPasswordForm">
                         <label for="adminCurrentPassword">كلمة السر الحالية</label><input id="adminCurrentPassword" type="password" autocomplete="current-password" required>
@@ -220,7 +223,7 @@
                 </div>
                 <div class="card" style="border-top-color:#ef4444;">
                     <h2 class="card-title" style="color:#ef4444;">🩹 طلبات تسجيل الإصابات المعلقة</h2>
-                    <div class="table-responsive"><table id="injuredReqTable"><thead><tr><th>#</th><th>هوية الأسرة</th><th>اسم المصاب</th><th>الهوية</th><th>نوع الإصابة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
+                    <h3>طلبات إضافة الأيتام</h3><div class="table-responsive"><table id="orphanReqTable"><thead><tr><th>#</th><th>هوية الأسرة</th><th>اسم اليتيم</th><th>هويته</th><th>الوصي</th><th>إجراء</th></tr></thead><tbody></tbody></table></div><h3>طلبات تسجيل الإصابات</h3><div class="table-responsive"><table id="injuredReqTable"><thead><tr><th>#</th><th>هوية الأسرة</th><th>اسم المصاب</th><th>الهوية</th><th>نوع الإصابة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody></tbody></table></div>
                 </div>
                 <div class="card" style="border-top-color:#8b5cf6;">
                     <h2 class="card-title" style="color:#8b5cf6;">📩 صندوق الشكاوى والطلبات</h2>
@@ -274,7 +277,7 @@
                             <div class="input-group"><label>(18-60 سنة) انثى</label><input type="number" id="f_24" value="0"></div>
                             <div class="input-group"><label>(فوق 60) ذكر</label><input type="number" id="f_25" value="0"></div>
                             <div class="input-group"><label>(فوق 60) انثى</label><input type="number" id="f_26" value="0"></div>
-                            <div class="input-group"><label>العدد الكلي للأفراد</label><input type="number" id="f_27" value="1" style="background:#e0f2fe; font-weight:bold;"></div>
+                            <div class="input-group"><label for="familyInjuredCount">عدد المصابين في الأسرة</label><input type="number" id="familyInjuredCount" min="0" max="999" step="1"></div><div class="input-group"><label>العدد الكلي للأفراد</label><input type="number" id="f_27" value="1" style="background:#e0f2fe; font-weight:bold;"></div>
                             <h3 class="section-title">السكن والحالة</h3>
                             <div class="input-group"><label>عنوان السكن الأصلي</label><input type="text" id="f_28"></div>
                             <div class="input-group"><label>المحافظة الأصلية</label><input type="text" id="f_29"></div>
@@ -326,7 +329,7 @@
                     <div style="margin-bottom:10px; font-weight:bold; color:#0f172a;"><span id="famCount"></span></div>
 
                     <div class="table-responsive">
-                        <table id="familiesTable"><thead><tr><th>#</th><th>كود الأسرة</th><th>القاطع</th><th>الاسم رباعي</th><th>الهوية</th><th>الجنس</th><th>الميلاد</th><th>الجوال</th><th>جوال بديل</th><th>الحالة الاجتماعية</th><th>الزوجة 1</th><th>هوية الزوجة 1</th><th>ميلاد الزوجة 1</th><th>الزوجة 2</th><th>هوية الزوجة 2</th><th>ميلاد الزوجة 2</th><th>(يوم-سنتين) ذكر</th><th>(يوم-سنتين) انثى</th><th>(3-6) ذكر</th><th>(3-6) انثى</th><th>(7-12) ذكر</th><th>(7-12) انثى</th><th>(13-17) ذكر</th><th>(13-17) انثى</th><th>(18-60) ذكر</th><th>(18-60) انثى</th><th>(+60) ذكر</th><th>(+60) انثى</th><th>العدد الكلي</th><th>السكن الأصلي</th><th>المافظة الاصلية</th><th>السكن الحالي</th><th>المحافظة الحالية</th><th>المسكن</th><th>الحالة</th><th>المهنة</th><th>الضرر</th><th>إعاقة</th><th>امراض مزمنة</th><th>تعيل امرأة؟</th><th>حامل/مرضعة؟</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody></tbody></table>
+                        <table id="familiesTable"><thead><tr><th>#</th><th>كود الأسرة</th><th>القاطع</th><th>الاسم رباعي</th><th>الهوية</th><th>الجنس</th><th>الميلاد</th><th>الجوال</th><th>جوال بديل</th><th>الحالة الاجتماعية</th><th>الزوجة 1</th><th>هوية الزوجة 1</th><th>ميلاد الزوجة 1</th><th>الزوجة 2</th><th>هوية الزوجة 2</th><th>ميلاد الزوجة 2</th><th>(يوم-سنتين) ذكر</th><th>(يوم-سنتين) انثى</th><th>(3-6) ذكر</th><th>(3-6) انثى</th><th>(7-12) ذكر</th><th>(7-12) انثى</th><th>(13-17) ذكر</th><th>(13-17) انثى</th><th>(18-60) ذكر</th><th>(18-60) انثى</th><th>(+60) ذكر</th><th>(+60) انثى</th><th>العدد الكلي</th><th>السكن الأصلي</th><th>المافظة الاصلية</th><th>السكن الحالي</th><th>المحافظة الحالية</th><th>المسكن</th><th>الحالة</th><th>المهنة</th><th>الضرر</th><th>إعاقة</th><th>امراض مزمنة</th><th>تعيل امرأة؟</th><th>حامل/مرضعة؟</th><th>ملاحظات</th><th>عدد المصابين</th><th>إجراء</th></tr></thead><tbody></tbody></table>
                     </div>
                 </div>
             </div>
@@ -347,7 +350,7 @@
                                 <input type="text" id="a_4" list="aidTypesGlobalList" required autocomplete="off">
                                 <datalist id="aidTypesGlobalList"></datalist>
                             </div>
-                            <div class="input-group"><label>ملاحظة</label><input type="text" id="a_5"></div>
+                            <div class="input-group"><label>ملاحظة</label><input type="text" id="a_5"></div><div class="input-group"><label for="aidReceivedDate">تاريخ الاستلام</label><input type="date" id="aidReceivedDate" required></div>
                             <div class="input-group"><label>الكمية</label><input type="text" id="a_6" required></div>
                         </div>
                         <button type="submit" class="btn btn-green">حفظ</button>
@@ -355,7 +358,7 @@
                 </div>
                 <div class="card">
                     <div class="btn-group-tools">
-                        <input type="text" id="aidsSearch" oninput="filterSimpleTable('aidsTable','aidsSearch')" placeholder="🔍 بحث بالاسم / الهوية / النوع..." style="flex:1;min-width:220px;padding:9px;border:2px solid #38bdf8;border-radius:6px;">
+                        <label>تاريخ الاستلام <input type="date" id="aidFilterDate" onchange="filterSimpleTable('aidsTable','aidsSearch')"></label><label>نوع المساعدة <input id="aidFilterType" list="aidTypesGlobalList" oninput="filterSimpleTable('aidsTable','aidsSearch')"></label><input type="text" id="aidsSearch" oninput="filterSimpleTable('aidsTable','aidsSearch')" placeholder="🔍 بحث بالاسم / الهوية / النوع..." style="flex:1;min-width:220px;padding:9px;border:2px solid #38bdf8;border-radius:6px;">
                         <input type="file" id="imp_aids" accept=".xlsx, .xls" style="display:none;" onchange="importExcel(event, 'db_aids', 6)">
                         <button class="btn btn-green" style="margin:0;" onclick="document.getElementById('imp_aids').click()">📤 استيراد إكسل</button>
                         <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('aidsTable', 'المساعدات.xlsx')">📥 تصدير إكسل</button>
@@ -370,7 +373,7 @@
                 <div class="header"><h1>🩹 كشف المصابين</h1></div>
                 <div class="card">
                     <h2 class="card-title">➕ إضافة مصاب</h2>
-                    <form onsubmit="addInjured(event)">
+                    <form onsubmit="addInjured(event)"><label for="injuryHead">هوية رب الأسرة (لربط إصابة أحد الأفراد)</label><input id="injuryHead" inputmode="numeric" pattern="[0-9٠-٩]{9}">
                         <div class="form-grid">
                             <div class="input-group"><label>اسم المصاب</label><input type="text" id="i_1" required></div>
                             <div class="input-group"><label>الهوية</label><input type="text" id="i_2" required></div>
@@ -583,6 +586,6 @@
 
     <script defer src="/assets/startup-r3.js"></script>
     <script defer src="/assets/camp-recovery-config.js?v=jesr-live-20261125"></script>
-    <script defer src="/assets/admin-r3.js?v=jesr-family-accounts-20261125"></script>
+    <script defer src="/assets/admin-r3.js?v=jesr-registers-20261127"></script>
 </body>
 </html>
