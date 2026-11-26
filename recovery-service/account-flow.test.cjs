@@ -128,6 +128,15 @@ test('family activation, reveal, reset and password change keep the same linked 
     }
     assert.equal((await post('verify', {...answers, session:retrySession})).body.state, 'existing');
     assert.equal((await post('password', {session:retrySession, password:'Forbidden synthetic 9'})).status, 409);
+    const assigned = {id, password:'Staff assigned 42'};
+    assert.equal((await post('admin/set-password', assigned, 'family-token')).status, 403);
+    assert.equal((await post('admin/set-password', {...assigned,password:'short'}, 'admin-token')).status, 400);
+    assert.equal((await post('admin/set-password', assigned, 'admin-token')).body.state, 'completed');
+    assert.equal(users.get(email).password, assigned.password);
+    assert.ok(audits.some(entry => entry.action === 'family-password-assignment-requested'));
+    assert.ok(audits.every(entry => !JSON.stringify(entry).includes(assigned.password)));
+    assert.equal((await post('change-password', {password:'Family chosen 43'}, 'family-token')).body.state, 'completed');
+    assert.equal(users.get(email).password, 'Family chosen 43');
     const reset = await post('admin/reset-link', {id}, 'admin-token');
     assert.equal(new URL(reset.body.link).searchParams.get('reset'), resetCode);
     assert.equal((await post('complete-reset', {code:resetCode, password:'Reset synthetic 2'})).body.state, 'completed');

@@ -23,7 +23,7 @@ const passwordStore = project === 'alhayacamp-a31eb'
 const defaultOrigin = 'https://' + project + '.web.app';
 const siteOrigin = passwordStore ? 'https://alhayacamp.web.app' : defaultOrigin;
 const allowedOrigins = new Set([siteOrigin, defaultOrigin]);
-const adminPaths = new Set(['/api/admin/reset-link', '/api/admin/reveal']);
+const adminPaths = new Set(['/api/admin/reset-link', '/api/admin/reveal', '/api/admin/set-password']);
 const changePath = '/api/change-password';
 const resetPath = '/api/complete-reset';
 const apiKey = process.env.CAMP_FIREBASE_WEB_API_KEY;
@@ -187,6 +187,17 @@ const server = http.createServer(async (req, res) => {
           return send(res, 200, {password});
         }
         if (!validPassword(body.password)) return send(res, 400, {error:'password'});
+        if (name === '/api/admin/set-password') {
+          const admin = await requireRecentAdmin(auth, db, token);
+          const user = await linkedFamily(auth, db, body.id);
+          await db.ref('family_account_audit').push({
+            action:'family-password-assignment-requested', adminUid:admin.uid, familyUid:user.uid, at:Date.now()
+          });
+          const ref = db.ref('managed_family_passwords/' + user.uid);
+          await changeManagedPassword(ref, passwordStore, user.uid, body.password,
+            () => auth.updateUser(user.uid, {password:body.password}));
+          return send(res, 200, {state:'completed'});
+        }
         if (name === resetPath) {
           if (typeof body.code !== 'string' || !/^[\w-]{10,512}$/.test(body.code)) {
             return send(res, 400, {error:'reset-code'});
