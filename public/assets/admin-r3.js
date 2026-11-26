@@ -1029,13 +1029,53 @@
             const c = localDB.claims || {};
             return Object.keys(c).find(u => c[u] && safeKey(String(c[u].id)) === key) || null;
         }
+        function openFamilyReset(key) {
+            if (isLimited || !auth.currentUser || !famByKey(key)) return;
+            if (_pwBusy) { toast('استنّى لحد ما يخلص الطلب الحالي.'); return; }
+            if (document.getElementById('familyResetDialog')) return;
+            const dialog = document.createElement('dialog');
+            dialog.id = 'familyResetDialog';
+            dialog.setAttribute('aria-labelledby', 'familyResetTitle');
+            dialog.innerHTML = '<h3 id="familyResetTitle">إعادة تعيين كلمة سر العائلة</h3><p></p><div class="btnrow"><button class="btn btn-blue" type="button">تحقّقت من هوية العائلة، أنشئ الرابط</button><button class="btn" type="button">إغلاق</button></div><p role="status"></p>';
+            dialog.querySelector('p').textContent = 'العائلة: ' + famByKey(key)[1];
+            const [issue, close] = dialog.querySelectorAll('button');
+            const message = dialog.querySelector('[role=status]');
+            close.onclick = () => dialog.close();
+            dialog.addEventListener('close', () => dialog.remove(), {once:true});
+            issue.onclick = async () => {
+                issue.disabled = true;
+                message.textContent = 'جارٍ إنشاء الرابط…';
+                const link = await familyAccountAction(key, 'reset-link');
+                if (!dialog.open) return;
+                if (!link) {
+                    message.textContent = 'ما تم إصدار رابط. راجع رسالة الخدمة وجرّب مجدداً.';
+                    issue.disabled = false;
+                    return;
+                }
+                const field = document.createElement('input');
+                field.readOnly = true;
+                field.dir = 'ltr';
+                field.setAttribute('aria-label','رابط إعادة التعيين');
+                field.value = link;
+                dialog.insertBefore(field, issue.parentElement);
+                message.textContent = 'سلّم الرابط للعائلة مباشرة. الرابط للاستخدام مرة واحدة.';
+                issue.textContent = 'نسخ الرابط';
+                issue.disabled = false;
+                issue.onclick = async () => {
+                    try { await navigator.clipboard.writeText(field.value); message.textContent = 'تم نسخ الرابط.'; }
+                    catch { field.focus(); field.select(); message.textContent = 'الرابط محدّد. انسخه من قائمة الجهاز.'; }
+                };
+            };
+            document.body.appendChild(dialog);
+            dialog.showModal();
+        }
+
         async function familyAccountAction(key, action, button) {
             if (isLimited || _pwBusy || !auth.currentUser || !famByKey(key)) return;
             if (!window.CAMP_RECOVERY_URL) {
                 alert('خدمة حسابات العائلات لسه مش مربوطة.');
                 return;
             }
-            if (action === 'reset-link' && !confirm('هل تحققت من هوية العائلة قبل إصدار رابط إعادة التعيين؟')) return;
             _pwBusy = true;
             const status = document.getElementById('accountActionStatus');
             status.textContent = 'جارٍ الاتصال بخدمة الحسابات…';
@@ -1063,7 +1103,7 @@
                         setTimeout(() => { target.textContent = 'إظهار'; }, 10000);
                     }
                 } else if (response.ok && action === 'reset-link') {
-                    prompt('انسخ الرابط وسلّمه للعائلة مباشرة بعد التحقق من هويتها:', result.link);
+                    return result.link;
                 } else {
                     alert('تعذّر إكمال الطلب. تأكّد من صلاحياتك وحاول مرة ثانية.');
                 }
@@ -1088,7 +1128,7 @@
                 n++;
                 const active = claimed.has(cleanKey);
                 const pwCell = active ? '<button id="reveal-' + esc(cleanKey) + '" class="btn btn-blue" onclick="familyAccountAction(\'' + esc(cleanKey) + '\',\'reveal\',this)">إظهار</button>' : '—';
-                const btns = active ? '<button class="btn btn-blue" onclick="familyAccountAction(\'' + esc(cleanKey) + '\',\'reset-link\')">إعادة تعيين كلمة السر</button>' : '';
+                const btns = active ? '<button class="btn btn-blue" onclick="openFamilyReset(\'' + esc(cleanKey) + '\')">إعادة تعيين كلمة السر</button>' : '';
                 prow.push('<tr><td>' + n + '</td><td>' + esc(fam[2]) + '</td><td><strong>' + esc(fam[1]) + '</strong></td><td style="direction:ltr;font-weight:bold;">' + pwCell + '</td><td style="color:' + (active ? '#10b981' : '#64748b') + ';font-weight:bold;">' + (active ? '✅ مفعّل' : 'لم يفعّل') + '</td><td style="white-space:nowrap;">' + btns + '</td></tr>');
             });
             tbody.innerHTML = prow.join('');
