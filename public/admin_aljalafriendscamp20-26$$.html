@@ -133,7 +133,7 @@
             </div>
 
             <!-- سجل العمليات -->
-            <section class="tab-content" id="vulnerable-tab"><div class="header"><h1>الأسر الهشّة</h1></div><div class="card"><label for="vulnerableSearch">بحث بالاسم أو الهوية أو الكود</label><input id="vulnerableSearch" oninput="renderVulnerable()"><div class="table-responsive"><table><thead><tr><th>الكود</th><th>الاسم</th><th>الهوية</th><th>القاطع</th><th>الأفراد</th><th>الإجراء</th></tr></thead><tbody id="vulnerableRows"></tbody></table></div></div></section>
+            <section class="tab-content" id="vulnerable-tab"><div class="header"><h1>الأسر الهشّة</h1></div><div class="card"><div class="btnrow"><button id="export_vulnerable" class="btn btn-blue" onclick="exportVulnerable()">تصدير الكشف</button><button class="btn btn-green" onclick="document.getElementById('imp_vulnerable').click()">استيراد أسر هشّة</button><input hidden type="file" id="imp_vulnerable" accept=".xlsx,.xls" onchange="importVulnerable(this)"></div><label for="vulnerableSearch">بحث بالاسم أو الهوية أو الكود</label><input id="vulnerableSearch" oninput="renderVulnerable()"><div class="table-responsive"><table><thead><tr><th>الكود</th><th>الاسم</th><th>الهوية</th><th>القاطع</th><th>الأفراد</th><th>الإجراء</th></tr></thead><tbody id="vulnerableRows"></tbody></table></div></div></section>
             <section id="settings-tab" class="tab-content" aria-labelledby="settingsTitle">
                 <div class="header"><h1 id="settingsTitle">الإعدادات</h1></div>
                 <div class="card"><h2>مظهر لوحة الإدارة</h2>
@@ -567,6 +567,7 @@
                     <h2 class="card-title">قائمة العائلات وحالة الدفع</h2>
                     <div class="btn-group-tools">
                         <input type="text" id="subSearch" onkeyup="filterSubscribers()" placeholder="بحث عن عائلة أو هوية..." style="flex:1; padding:10px; border:2px solid #38bdf8; border-radius:4px; max-width:300px;">
+                        <button class="btn btn-blue" onclick="exportPayments()">تصدير حركات الاشتراك</button><input hidden id="imp_payments" type="file" accept=".xlsx,.xls" onchange="importFund(event,'payment')"><button class="btn btn-green" onclick="document.getElementById('imp_payments').click()">استيراد حركات الاشتراك</button>
                         <button class="btn btn-blue" style="margin:0;" onclick="exportExcel('subscribersTable', 'دافعو_الاشتراك.xlsx')">📥 تصدير الكشف</button>
                         <button class="btn btn-green" style="margin:0;" onclick="loadSubscribers()">🔄 تحديث البيانات</button>
                     </div>
@@ -586,6 +587,6 @@
 
     <script defer src="/assets/startup-r3.js"></script>
     <script defer src="/assets/camp-recovery-config.js?v=jesr-live-20261125"></script>
-    <script defer src="/assets/admin-r3.js?v=jesr-registers-20261127"></script>
+    <script defer src="/assets/admin-r3.js?v=jesr-excel-20261127"></script>
 </body>
 </html>

@@ -522,8 +522,8 @@
         async function exportAudit(){
             if (!auditLoaded) { toast('انتظر تحميل سجل العمليات.', 'warn'); return; }
             if (!await loadExcel()) return;
-            const rows=[['الوقت','المستخدم','العملية','التفاصيل']].concat(auditRows().map(r=>[new Date(r.t).toLocaleString('en-GB'),r.u,r.a,r.d]));
-            const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Audit');XLSX.writeFile(wb,'سجل_العمليات.xlsx');
+            const rows=[['الوقت','المستخدم','العملية','التفاصيل']].concat(auditRows().map(r=>[new Date(r.t),r.u,r.a,r.d]));
+            const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,workbookSheet(rows[0],rows.slice(1)),'Audit');XLSX.writeFile(wb,'سجل_العمليات.xlsx');
         }
 
 
@@ -1406,10 +1406,44 @@
             } catch { toast('تعذّر حفظ العلامة. تأكّد إنّ الهوية مسجّلة مرة واحدة.', 'err'); }
             finally { button.disabled = false; }
         }
+        function vulnerableResults() {
+            const query = toLatin(document.getElementById('vulnerableSearch').value.trim());
+            return getDB('db_families').filter(row => row?.[42] === true && [row[40],row[1],row[2]].some(v => toLatin(v || '').includes(query)));
+        }
+        function exportVulnerable() {
+            if (ROLE !== 'super_admin') return;
+            return exportRowsToExcel(['الكود','الاسم','الهوية','القاطع','الأفراد'],vulnerableResults().map(r=>[r[40],r[1],r[2],sectorName(r[0]),r[26]]),'الأسر_الهشة.xlsx','الأسر الهشة');
+        }
+        async function importVulnerable(input) {
+            if (ROLE !== 'super_admin' || !input.files[0]) return;
+            try {
+                if (!await loadExcel()) return;
+                const wb = XLSX.read(await input.files[0].arrayBuffer(),{type:'array',cellNF:true});
+                const [headers,...rows] = readWorkbookRows(wb.Sheets[wb.SheetNames[0]]).filter(rowHasData);
+                const col = headers?.findIndex(h=>['الهوية','رقم الهوية'].includes(String(h).trim()));
+                if (!(col >= 0) || !rows.length) throw Error('الملف بحاجة لعمود الهوية وصفوف أسر.');
+                const ids = new Set(rows.map(r=>toLatin(r[col]).trim()));
+                if ([...ids].some(id=>!/^\d+$/.test(id))) throw Error('في هوية ناقصة أو غير صالحة.');
+                if (!confirm('تعليم '+ids.size+' أسرة كهشّة؟')) return;
+                const result = await rdb.ref('db_families').transaction(current=>{
+                    if (!current) return current;
+                    const found = new Set();
+                    for (const row of Object.values(current)) {
+                        const id=digitsOf(row?.[2]);
+                        if (!ids.has(id)) continue;
+                        if (found.has(id)) return;
+                        found.add(id); row[42]=true;
+                    }
+                    if (found.size===ids.size) return current;
+                });
+                if (!result.committed || !result.snapshot.exists()) throw Error('تأكّد إنّ كل هوية موجودة مرة واحدة بكشف الأسر.');
+                localDB.db_families=toRows(result.snapshot.val());
+                refreshNow(); renderVulnerable(); audit('استيراد أسر هشّة',String(ids.size)); toast('تم تعليم الأسر.');
+            } catch (error) { toast(error.message,'err'); } finally { input.value=''; }
+        }
         function renderVulnerable() {
             if (ROLE !== 'super_admin') return;
-            const query = toLatin(document.getElementById('vulnerableSearch').value.trim());
-            const rows = getDB('db_families').filter(row => row?.[42] === true && [row[40],row[1],row[2]].some(v => toLatin(v || '').includes(query)));
+            const rows = vulnerableResults();
             document.getElementById('vulnerableRows').innerHTML = rows.map(row => '<tr>' +
                 [row[40],row[1],row[2],sectorName(row[0]),row[26]].map(v => '<td>' + esc(v ?? '') + '</td>').join('') +
                 '<td><button class="btn btn-blue" onclick="showFamilyByKey(\'' + digitsOf(row[2]) + '\')">بطاقة الأسرة</button>' + vulnerableButton(row) + '</td></tr>').join('') ||
@@ -1521,18 +1555,13 @@
             fundInTable:'db_fund', fundOutTable:'db_fund', subscribersTable:'db_families', stockTable:'db_stock'
         };
 
-        function excelClean(v) {
-            if (v === null || v === undefined) return '';
-            if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v.getTime())) return formatDateValue(v);
-            return String(v).trim();
-        }
         let excelLoading;
         async function loadExcel() {
             if (typeof XLSX !== 'undefined') return true;
             if (!excelLoading) {
                 excelLoading = new Promise((resolve, reject) => {
                     const script = document.createElement('script');
-                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+                    script.src = '/assets/vendor/sheetjs/xlsx.full.min.js';
                     script.onload = resolve;
                     script.onerror = () => { script.remove(); reject(new Error('Excel download failed')); };
                     document.head.appendChild(script);
@@ -1547,22 +1576,54 @@
             return false;
         }
 
+        function workbookSheet(headers, rows) {
+            const sheet = XLSX.utils.aoa_to_sheet([headers]);
+            rows.forEach((row,r) => headers.forEach((heading,c) => {
+                const input = row?.[c];
+                if (input === undefined || input === null || input === '') return;
+                const h = String(heading), raw = String(input).trim();
+                const digits = toLatin(raw).replace(/٫/g,'.').replace(/٬/g,',');
+                const isDate = /تاريخ|ميلاد|^ينتهي$|^الوقت$/.test(h);
+                const identifier = /هوية|هويه|جوال|هاتف/.test(h);
+                const amount = /عدد|الكمية|مبلغ|مدفوع|رصيد|متبق|قيمة|إجمالي|مجموع|العمر|ذكر|أنثى|انثى|ذوو الإعاقة|أمراض مزمنة|الأفراد|عدد الأسر|^الوارد$|^الصادر$|^الفرق$|^#$/.test(h);
+                let cell = {t:'s',v:raw};
+                if (isDate) {
+                    let date = input instanceof Date ? input : null;
+                    if (!date && h==='الوقت') {
+                        const time=digits.match(/^(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}):(\d{2}):(\d{2})$/);
+                        if (time) date=new Date(+time[3],+time[2]-1,+time[1],+time[4],+time[5],+time[6]);
+                    }
+                    const value = date ? '' : formatDateValue(input);
+                    const parts = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+                    const d = date || (parts && new Date(+parts[3], +parts[2]-1, +parts[1]));
+                    if (d && !isNaN(+d) && (!parts || (d.getMonth()+1 === +parts[2] && d.getDate()=== +parts[1]))) cell = {t:'d',v:d,z:h==='الوقت'?'dd/mm/yyyy hh:mm:ss':'dd/mm/yyyy'};
+                } else if (identifier && /^\d{1,15}$/.test(digits)) {
+                    cell = {t:'n',v:Number(digits),z:'0'.repeat(digits.length)};
+                } else if (!identifier && (typeof input === 'number' || amount)) {
+                    const value = digits.replace(/\s*₪\s*$/,'');
+                    if (/^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/.test(value)) cell = {t:'n',v:Number(value.replace(/,/g,''))};
+                }
+                sheet[XLSX.utils.encode_cell({r:r+1,c})] = cell;
+            }));
+            sheet['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:headers.length-1}});
+            return sheet;
+        }
+        function readWorkbookRows(sheet) {
+            const rows = XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:'',blankrows:true,range:0});
+            rows.forEach((row,r) => row.forEach((v,c) => {
+                const cell = sheet[XLSX.utils.encode_cell({r,c})];
+                if (cell?.t === 'n' && /^0{2,15}$/.test(cell.z || '')) row[c] = String(v).padStart(cell.z.length,'0');
+            }));
+            return rows;
+        }
         async function exportRowsToExcel(headers, rows, filename, sheetName) {
             if (!await loadExcel()) return;
             
-            const dc = headers.map(h => /تاريخ|ميلاد|^التاريخ$/.test(String(h))), nc = headers.map(h => /ملاحظ/.test(String(h)));
-            const aoa = [headers].concat(rows.map(row => headers.map((header, index) => {
-                const value = row?.[index];
-                if (header === 'العمر (سنوات)' && /^\d+$/.test(String(value))) return Number(value);
-                if (dc[index]) return formatDateValue(value);
-                if (nc[index]) return smartNote(value);
-                return excelClean(value);
-            })));
-            if (aoa.length <= 1) { toast('⚠️ لا توجد بيانات لتصديرها.'); return; }
-            const ws = XLSX.utils.aoa_to_sheet(aoa);
+            if (!rows.length) { toast('⚠️ لا توجد بيانات لتصديرها.'); return; }
+            const ws = workbookSheet(headers, rows);
             ws['!cols'] = headers.map((h,i) => {
                 let max = String(h).length;
-                for (let j=1; j<Math.min(aoa.length,501); j++) max=Math.max(max,String(aoa[j][i]||'').length);
+                for (let j=0; j<Math.min(rows.length,500); j++) max=Math.max(max,String(rows[j]?.[i] ?? '').length);
                 return {wch:Math.min(Math.max(max+2,12),40)};
             });
             const wb = XLSX.utils.book_new();
@@ -1603,7 +1664,7 @@
         }
 
         function exportFamilyCount(rows, filename) {
-            return exportRowsToExcel([...FAM_LABELS,'عدد المصابين'],rows.map(f=>[sectorName(f[0]),...Array.from({length:39},(_,i)=>f[i+1] ?? ''),f[41] ?? '']),filename,'الأسر');
+            return exportRowsToExcel([...FAM_LABELS,'كود الأسرة','عدد المصابين'],rows.map(f=>[sectorName(f[0]),...Array.from({length:41},(_,i)=>f[i+1] ?? '')]),filename,'الأسر');
         }
         function exportFilteredExcel() {
             ADV.apply('familiesTable');
@@ -1692,12 +1753,12 @@
             const first = normalizeExcelHeader(h[0]);
             if (first === '#' || first === 'رقم' || first === 'الرقم' || first === 'ت') { r.shift(); h.shift(); }
             const last = normalizeExcelHeader(h[h.length-1]);
-            if (['حذف','إجراءات','الاجراءات','خيارات','الخيارات'].includes(last)) { r.pop(); h.pop(); }
+            if (['حذف','إجراء','اجراء','إجراءات','الاجراءات','خيارات','الخيارات'].includes(last)) { r.pop(); h.pop(); }
             return {row:r,header:h};
         }
-        // استيراد آمن لتجربة أول خمس أسر فقط من ورقة "الرئيسية".
+        // تنسيق كشف القاطع G القديم.
         // الصف الرابع عناوين، الخامس فئات الجنس، والبيانات تبدأ من الصف السادس.
-        function mapCampFirstFive(rows) {
+        function mapCampFamilies(rows) {
             const hdr = rows[3] || [];
             if (normalizeExcelHeader(hdr[1]) !== normalizeExcelHeader('اسم رب الأسرة رباعي') ||
                 normalizeExcelHeader(hdr[2]) !== normalizeExcelHeader('رقم الهوية')) return null;
@@ -1705,7 +1766,7 @@
             const v = (r, i) => r[i] == null ? '' : r[i];
             const txt = x => String(x == null ? '' : x).trim();
             const number = x => { const n = Number(toLatin(txt(x))); return Number.isFinite(n) ? n : 0; };
-            for (let i = 5; i < rows.length && output.length < 5; i++) {
+            for (let i = 5; i < rows.length; i++) {
                 const r = rows[i] || [];
                 if (!txt(v(r,1)) || !digitsOf(v(r,2))) continue;
                 const f = new Array(41).fill('');
@@ -1725,21 +1786,22 @@
             return {output, warnings};
         }
         function importExcel(event, dbKey, fieldCount) {
+            if (dbKey === 'db_stock' && isLimited) return;
             const file = event.target.files[0]; if (!file) return;
             const input = event.target, reader = new FileReader();
             reader.onerror = () => { toast('❌ تعذر قراءة الملف.'); input.value = ''; };
             reader.onload = async function(e) {
                 if (!await loadExcel()) { input.value = ''; return; }
                 try {
-                    const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true, raw:true});
+                    const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true, cellNF:true, raw:true});
                     // أول ورقة تحتوي بيانات فعلية (وليس بالضرورة الأولى)
                     let json = null;
                     for (const nm of wb.SheetNames) {
-                        const j = XLSX.utils.sheet_to_json(wb.Sheets[nm], {header:1, raw:true, defval:''});
+                        const j = readWorkbookRows(wb.Sheets[nm]);
                         if (j.filter(rowHasData).length > 1) { json = j; break; }
                     }
                     if (!json) { toast('⚠️ الملف فارغ أو يحتوي على العناوين فقط.'); return; }
-                    const campResult = dbKey === 'db_families' ? mapCampFirstFive(json) : null;
+                    const campResult = dbKey === 'db_families' ? mapCampFamilies(json) : null;
                     let headerIndex = 0;
                     while (headerIndex < json.length && !rowHasData(json[headerIndex])) headerIndex++;
                     const header = json[headerIndex].map(v => String(v == null ? '' : v));
@@ -1747,6 +1809,8 @@
                     // 1) إن تطابقت عناوين الملف مع عناوين الكشف نستورد بالاسم (مهما كان ترتيب الأعمدة)
                     const labels = EXPORT_SCHEMAS[dbKey] || [];
                     const labelIdx = new Map(labels.map((l, i) => [normalizeExcelHeader(l), i]));
+                    const aliases = {db_children:{'الهوية':1,'الميلاد':2,'الجوال':6},db_chronic:{'الدواء':5},db_injured:{'الاسم':0,'الاصابة':3,'بقاعدة الأسر':6}};
+                    for (const [name,index] of Object.entries(aliases[dbKey] || {})) labelIdx.set(normalizeExcelHeader(name),index);
                     let matched = 0;
                     const colMap = header.map(h => { const i = labelIdx.get(normalizeExcelHeader(h)); if (i !== undefined) matched++; return i === undefined ? -1 : i; });
                     const byName = matched >= Math.max(3, Math.ceil(labels.length * 0.5));
@@ -1770,9 +1834,29 @@
                             if (column >= 0 && raw[column] != null) {
                                 const count = toLatin(raw[column]).trim();
                                 if (!/^\d{0,3}$/.test(count)) {toast('عدد المصابين غير صالح في السطر ' + (i+1),'err');return;}
-                                record[40]=''; record[41]=count;
+                                record[41]=count;
                             }
                         }
+                        if (dbKey === 'db_families') {
+                            if (!digitsOf(record[2]) || !record[1]) throw Error('اسم رب الأسرة وهويته مطلوبين بالسطر '+(i+1));
+                            record[40]=String(raw[header.indexOf('كود الأسرة')] ?? '').trim();
+                            if (record[40] && !CODE_RE.test(record[40])) throw Error('كود أسرة غير صالح بالسطر '+(i+1));
+                        }
+                        if (dbKey==='db_injured' || dbKey==='db_orphans') {
+                            const owner=header.indexOf('هوية رب الأسرة المرتبطة');
+                            if (owner>=0) record[fieldCount]=digitsOf(raw[owner]);
+                        }
+                        if (dbKey==='db_aids') {
+                            const date=raw[header.indexOf('تاريخ الاستلام')];
+                            if (date) {
+                                const iso=stockISO(formatDateValue(date));
+                                if (!iso) throw Error('تاريخ استلام غير صالح بالسطر '+(i+1));
+                                record[4]=('['+iso+'] '+String(out[4] || '')).trim();
+                            }
+                            const code=header.indexOf('كود الأسرة');
+                            if (code>=0) record[6]=String(raw[code] || '');
+                        }
+                        if (dbKey==='db_stock' && (!['وارد','صادر'].includes(record[1]) || !record[2] || !(Number(toLatin(record[3]))>0))) throw Error('حركة مخزون غير صالحة بالسطر '+(i+1));
                         imported.push(record);
                     }
                     if (!imported.length) { toast('⚠️ لم يتم العثور على سجلات صالحة للاستيراد.'); return; }
@@ -1788,7 +1872,7 @@
                     }
                     const msg = 'سيتم استيراد ' + imported.length + ' سجل'
                         + (skipped ? ' (تخطي ' + skipped + ' سجل مكرر بنفس رقم الهوية)' : '')
-                        + '\nطريقة مطابقة الأعمدة: ' + (campResult ? 'الكشف الأصلي (أول خمس أسر، القاطع G)' : (byName ? 'حسب أسماء العناوين' : 'حسب ترتيب الأعمدة'))
+                        + '\nطريقة مطابقة الأعمدة: ' + (campResult ? 'الكشف الأصلي، القاطع G' : (byName ? 'حسب أسماء العناوين' : 'حسب ترتيب الأعمدة'))
                         + (campResult && campResult.warnings.length ? '\n⚠️ اختلافات أعداد الأسرة:\n' + campResult.warnings.join('\n') : '')
                         + '\n\nهل تريد المتابعة؟';
                     if (!confirm(msg)) return;
@@ -1796,7 +1880,7 @@
                     const current = getDB(dbKey);
                     rdb.ref(dbKey).transaction(cur => {
                         const arr = Array.isArray(cur) ? cur.slice() : (cur ? Object.values(cur) : []);
-                        if (campResult) {
+                        if (dbKey === 'db_families') {
                             // أعد فحص التكرار داخل المعاملة لحماية الاستيراد من التزامن.
                             const usedIds = new Set(arr.map(r => digitsOf(r && r[2])).filter(Boolean));
                             const usedCodes = new Set(arr.map(r => String((r && r[40]) || '').toUpperCase()).filter(Boolean));
@@ -1804,17 +1888,21 @@
                             for (const fam of imported) {
                                 const id = digitsOf(fam[2]);
                                 if (!id || usedIds.has(id)) continue;
-                                let code;
-                                do { code = 'G' + String(next++).padStart(4,'0'); }
-                                while (usedCodes.has(code) && next <= 10001);
-                                if (usedCodes.has(code) || next > 10001) return;
+                                let code=fam[40] || '';
+                                if (code && usedCodes.has(code.toUpperCase())) return;
+                                if (!code && campResult) {
+                                    do { code = 'G' + String(next++).padStart(4,'0'); }
+                                    while (usedCodes.has(code) && next <= 10001);
+                                }
+                                if (code && (usedCodes.has(code.toUpperCase()) || next > 10001)) return;
                                 const added = fam.slice(); added[40] = code;
-                                arr.push(added); usedIds.add(id); usedCodes.add(code);
+                                arr.push(added); usedIds.add(id); usedCodes.add(code.toUpperCase());
                             }
                             return arr;
                         }
                         return arr.concat(imported);
                     }).then(result => {
+                        if (result?.committed === false) throw Error('تعذّر الاستيراد. افحص أكواد الأسر المكرّرة.');
                         const snapshot = result && result.snapshot ? result.snapshot : result;
                         localDB[dbKey] = snapshot && typeof snapshot.val === 'function' ? toRows(snapshot.val()) : current.concat(imported);
                         if (['db_families','db_aids','db_children','db_injured','db_orphans'].includes(dbKey)) schedulePublish();
@@ -1822,6 +1910,7 @@
                         audit('استيراد إكسل', dbKey + ' | ' + imported.length + ' سجل' + (skipped ? ' | تخطي مكرر ' + skipped : ''));
                         toast('✅ تم استيراد ' + imported.length + ' سجل بنجاح' + (skipped ? ' (تخطي ' + skipped + ' مكرر)' : ''));
                         refreshNow();
+                        if (dbKey==='db_stock') loadStock();
                     }).catch(err => {
                         console.error('importExcel error:', err);
                         alert('❌ تعذر الاستيراد إلى Firebase: ' + (err && err.message ? err.message : err));
@@ -1872,37 +1961,48 @@
             updateFundTotals(); filterFund();
         }
 
+        function exportPayments() {
+            const rows=getDB('db_fund').filter(row=>String(row?.[1]).includes('وارد') && String(row[1]).includes('مساهمة'));
+            return exportRowsToExcel(EXPORT_SCHEMAS.db_fund,rows,'حركات_الاشتراك.xlsx','حركات الاشتراك');
+        }
         function importFund(event, fundType) {
+            if (isLimited) return;
             const file=event.target.files[0]; if(!file)return;
             const input=event.target; const reader=new FileReader();
             reader.onload=async function(e){
                 if (!await loadExcel()) { input.value = ''; return; }
                 try {
-                    const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false,raw:true});
+                    const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,cellNF:true,raw:true});
                     const sheet=wb.Sheets[wb.SheetNames[0]];
-                    const json=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:''});
+                    const json=readWorkbookRows(sheet);
                     if(json.length<=1){toast('⚠️ الملف فارغ أو يحتوي على العناوين فقط!');return;}
                     let headerIndex=0; while(headerIndex<json.length && !rowHasData(json[headerIndex])) headerIndex++;
+                    if (json[headerIndex]?.includes('الحالة') || json[headerIndex]?.some(h=>/المدفوع|حالة الدفع/.test(String(h)))) throw Error('اختار ملف حركات الاشتراك اللي فيه التاريخ والنوع والمبلغ والجهة.');
                     const imported=[];
                     for(let i=headerIndex+1;i<json.length;i++){
                         const raw=json[i]; if(!rowHasData(raw))continue;
                         const clean=stripExcelIndexAndActions(raw,json[headerIndex]); const r=clean.row;
                         if(!rowHasData(r))continue;
-                        let start=0;
+
                         // يدعم ملف الصندوق الذي يحتوي: التاريخ، النوع، المبلغ، الجهة، الملاحظات
                         let typeCell=String(r[1]||'');
                         let date=r[0]||'', amount='', name='', notes='';
                         if(typeCell.includes('وارد')||typeCell.includes('صادر')) { amount=r[2]||''; name=r[3]||''; notes=r[4]||''; }
                         else { amount=r[1]||''; name=r[2]||''; notes=r[3]||''; }
-                        const typeStr=(fundType==='in'?'وارد - استيراد':'صادر - استيراد');
-                        imported.push([formatDateValue(date),typeStr,String(amount).replace(/[^\d.-]/g,''),String(name||''),String(notes||'')]);
+                        const direction=fundType==='out'?'صادر':'وارد';
+                        if (fundType==='payment' && (!typeCell.includes('مساهمة') || !typeCell.includes('وارد'))) throw Error('السطر '+(i+1)+' مش حركة اشتراك واردة.');
+                        if (/وارد|صادر/.test(typeCell) && !typeCell.includes(direction)) throw Error('اتجاه الحركة لا يطابق كشف الصندوق.');
+                        const typeStr=typeCell.includes(direction)?typeCell:direction+' - استيراد';
+                        const value=toLatin(String(amount)).replace(/[,٬]/g,'').replace(/٫/g,'.').replace(/\s*₪$/,'').trim();
+                        if (!(Number(value)>0) || !Number.isFinite(Number(value)) || !stockISO(formatDateValue(date))) throw Error('تأكد من تاريخ الحركة ومبلغها بالسطر '+(i+1));
+                        imported.push([formatDateValue(date),typeStr,value,String(name||''),String(notes||'')]);
                     }
                     if(!imported.length){toast('⚠️ لم يتم العثور على حركات صالحة.');return;}
                     rdb.ref('db_fund').transaction(cur=>{const arr=Array.isArray(cur)?cur.slice():(cur?Object.values(cur):[]);return arr.concat(imported);}).then(result=>{
                         const snap=result&&result.snapshot?result.snapshot:result;
                         localDB.db_fund=snap&&typeof snap.val==='function'?(snap.val()||[]):getDB('db_fund').concat(imported);
-                        updateFundTotals(); loadFundTables(); audit('استيراد صندوق',(fundType==='in'?'وارد':'صادر')+' | '+imported.length+' حركة');
-                        toast(`✅ تم استيراد ${imported.length} حركة مالية كـ ${fundType==='in'?'وارد':'صادر'} بنجاح!`);
+                        updateFundTotals(); loadFundTables(); loadSubscribers(); audit('استيراد صندوق',(fundType==='out'?'صادر':'وارد')+' | '+imported.length+' حركة');
+                        toast(`✅ تم استيراد ${imported.length} حركة مالية كـ ${fundType==='out'?'صادر':'وارد'} بنجاح!`);
                     }).catch(err=>alert('❌ تعذر الاستيراد إلى Firebase: '+(err.message||err)));
                 }catch(err){console.error(err);alert('❌ تعذر قراءة ملف Excel: '+(err.message||err));}
                 finally{input.value='';}
@@ -2124,7 +2224,7 @@ const ADV = (function () {
         const cols = [];
         Array.from(head.cells).forEach((th, i) => {
             const label = th.textContent.trim();
-            if (!label || SKIP_HEAD.test(label)) return;
+            if (!label || SKIP_HEAD.test(label) || (table.id === 'passwordsTable' && /كلمة المرور|كلمة السر/.test(label))) return;
             cols.push({i, label, type: 'text'});
         });
         return cols.length >= 2 ? {cols, width: head.cells.length} : null;
@@ -2384,9 +2484,9 @@ const ADV = (function () {
     function visibleData(tableId) {
         apply(tableId);
         const table = document.getElementById(tableId), info = tableInfo(table);
-        { const tb0 = table.tBodies[0]; if (tb0 && tb0.__V) { const V = tb0.__V, pr = predicate(tableId); const keep = V.cells.filter((c, i) => (!V.familyFilter || V.familyFilter(i)) && (!V.q || matchTokens(V.txt[i], V.q)) && (!pr || pr(c))); return {headers: info.cols.map(c => c.label), rows: keep.map(r => info.cols.map(c => r[c.i]))}; } }
+        { const tb0 = table.tBodies[0]; if (tb0 && tb0.__V) { const V = tb0.__V, pr = predicate(tableId); const keep = V.cells.filter((c, i) => (!V.familyFilter || V.familyFilter(i)) && (!V.q || matchTokens(V.txt[i], V.q)) && (!pr || pr(c))); return {indices: keep.map(r=>Number(r[0])-1), headers: info.cols.map(c => c.label), rows: keep.map(r => info.cols.map(c => r[c.i]))}; } }
         const rows = dataRows(table, info.width).filter(tr => !tr.classList.contains('adv-hide') && tr.style.display !== 'none');
-        return {headers: info.cols.map(c => c.label), rows: rows.map(tr => info.cols.map(c => cellText(tr.cells[c.i])))};
+        return {indices: rows.map(tr=>Number(tr.cells[0].textContent)-1), headers: info.cols.map(c => c.label), rows: rows.map(tr => info.cols.map(c => cellText(tr.cells[c.i])))};
     }
     function sheetTitle(table) {
         const tab = table.closest('.tab-content'), h = tab && tab.querySelector('h1');
@@ -2397,7 +2497,27 @@ const ADV = (function () {
         if (!d.rows.length) { toast('لا توجد نتائج لتصديرها', 'warn'); return; }
         if (!await loadExcel()) return;
         const outputName = filename || sheetTitle(document.getElementById(tableId)) + '_نتائج_مفلترة_' + today() + '.xlsx';
-        await exportRowsToExcel(d.headers, d.rows, outputName, 'النتائج');
+        const key=TABLE_TO_DB[tableId];
+        if (['familiesTable','childrenTable','injuredTable','orphansTable','chronicTable','aidsTable','stockTable'].includes(tableId)) {
+            const records=d.indices.map(i=>getDB(key)[i]);
+            if (key==='db_families') return exportFamilyCount(records,outputName);
+            const headers=EXPORT_SCHEMAS[key].slice();
+            if (key==='db_children') headers.push('العمر (سنوات)');
+            if (key==='db_injured' || key==='db_orphans') headers.push('هوية رب الأسرة المرتبطة');
+            if (key==='db_aids') headers.push('كود الأسرة','تاريخ الاستلام');
+            const rows=records.map(record=>{
+                const row=Array.from({length:headers.length},(_,i)=>record[i] ?? '');
+                if (key==='db_children') row[10]=completedAge(row[2]);
+                if (key==='db_aids') {
+                    row[2]=sectorName(row[2]);
+                    const note=String(row[4]);
+                    row[7]=aidISO(note);
+                    if (row[7]) row[4]=note.replace(/^\[[^\]]+\]\s*|^\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}(?:\s*[—–]\s*|$)/,'');
+                }
+                return row;
+            });
+            await exportRowsToExcel(headers,rows,outputName,'النتائج');
+        } else await exportRowsToExcel(d.headers, d.rows, outputName, 'النتائج');
         toast('تم تصدير ' + d.rows.length + ' سجل');
     }
     function doPrint(tableId) {
@@ -3152,7 +3272,7 @@ function buildStockTab() {
     d.innerHTML = '<div class="header"><h1>📦 المخزون والمواد العينية</h1><p style="margin:2px 0 0;color:#7b808c;font-size:13px">سجّل ما يصل المخيم من مواد (مياه، خبز، أرز، تكايا...) وما يُوزَّع منها، ويحسب النظام المتبقي تلقائياً.</p></div>'
         + '<div class="card"><div class="stock-bar"><div id="stockQuick" class="stock-quick"></div><div class="stock-tools"><label style="margin:0">الفترة:</label><select id="stockPeriod" onchange="window.__stockP=this.value;loadStock()"><option value="today">اليوم</option><option value="7">آخر 7 أيام</option><option value="month">هذا الشهر</option><option value="all">الكل</option></select><button class="btn btn-blue" style="margin:0" onclick="openStockDialog()">➕ تسجيل حركة</button><button class="btn btn-blue" style="margin:0" onclick="openStockItems()">⚙️ الأصناف</button></div></div></div>'
         + '<div id="stockTiles" class="stat-grid"></div>'
-        + '<div class="card"><h2 class="card-title">📋 سجل الحركات</h2><div class="btnrow" style="gap:10px;flex-wrap:wrap"><input type="text" id="stockSearch" oninput="filterSimpleTable(\'stockTable\',\'stockSearch\')" placeholder="🔍 بحث بالصنف / الجهة / التاريخ..." style="flex:1;min-width:220px"><button class="btn btn-blue" style="margin:0" onclick="exportExcel(\'stockTable\',\'المخزون.xlsx\')">📥 تصدير إكسل</button></div>'
+        + '<div class="card"><h2 class="card-title">📋 سجل الحركات</h2><div class="btnrow" style="gap:10px;flex-wrap:wrap"><input hidden type="file" id="imp_stock" accept=".xlsx,.xls" onchange="importExcel(event,\'db_stock\',7)"><button class="btn btn-green" onclick="document.getElementById(\'imp_stock\').click()">استيراد حركات المخزون</button><input type="text" id="stockSearch" oninput="filterSimpleTable(\'stockTable\',\'stockSearch\')" placeholder="🔍 بحث بالصنف / الجهة / التاريخ..." style="flex:1;min-width:220px"><button class="btn btn-blue" style="margin:0" onclick="exportExcel(\'stockTable\',\'المخزون.xlsx\')">📥 تصدير إكسل</button></div>'
         + '<div class="table-responsive"><table id="stockTable"><thead><tr><th>#</th><th>التاريخ</th><th>الحركة</th><th>الصنف</th><th>الكمية</th><th>الوحدة</th><th>الجهة / المستلم</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody></tbody></table></div></div>';
     fund.insertAdjacentElement('afterend', d);
     const nav = document.getElementById('nav-fund');
@@ -3421,9 +3541,12 @@ async function repExcel() {
     
     const R = repRun(), wb = XLSX.utils.book_new(); wb.Workbook = {Views: [{RTL: true}]};
     const used = new Set(), nm = s => { let n = String(s).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 28) || 'ورقة', k = n, i = 2; while (used.has(k)) k = n.slice(0, 26) + ' ' + (i++); used.add(k); return k; };
-    const sum = [[R.title], [R.sub], ['تاريخ الإصدار', new Date().toLocaleDateString('en-GB')], []].concat(R.tiles.map(t => [t.l, t.v])).concat(R.notes.length ? [[], ['ملاحظات']].concat(R.notes.map(n => [n])) : []);
-    const s0 = XLSX.utils.aoa_to_sheet(sum); s0['!cols'] = [{wch: 30}, {wch: 24}]; XLSX.utils.book_append_sheet(wb, s0, nm('ملخص'));
-    R.sections.forEach(sec => { const aoa = [sec.cols].concat(sec.rows.map(r => r.map(v => v == null ? '' : v))); const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = sec.cols.map(() => ({wch: 20})); XLSX.utils.book_append_sheet(wb, ws, nm(sec.h)); });
+    const sum = [[R.title], [R.sub], ['تاريخ الإصدار', new Date()], []].concat(R.tiles.map(t => {
+        const value=toLatin(t.v).replace(/[,٬]/g,'').replace(/\s*₪$/,'').trim();
+        return [t.l,/^[+-]?\d+(\.\d+)?$/.test(value)?Number(value):t.v];
+    })).concat(R.notes.length ? [[], ['ملاحظات']].concat(R.notes.map(n => [n])) : []);
+    const s0 = XLSX.utils.aoa_to_sheet(sum,{dateNF:'dd/mm/yyyy'}); s0['!cols'] = [{wch: 30}, {wch: 24}]; XLSX.utils.book_append_sheet(wb, s0, nm('ملخص'));
+    R.sections.forEach(sec => { const ws = workbookSheet(sec.cols,sec.rows); ws['!cols'] = sec.cols.map(() => ({wch: 20})); XLSX.utils.book_append_sheet(wb, ws, nm(sec.h)); });
     XLSX.writeFile(wb, R.title.replace(/\s+/g, '_') + '_' + R.sub.replace(/[^\u0600-\u06FF\w]+/g, '_') + '.xlsx'); toast('تم تصدير التقرير');
 }
 
