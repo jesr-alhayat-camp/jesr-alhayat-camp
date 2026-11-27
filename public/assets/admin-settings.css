@@ -17,3 +17,6 @@ html[data-admin-theme=dark] { color-scheme: dark; --canvas: #101b22; --bg: #101b
 [data-admin-theme=dark] .modern-admin :is(.adv-toggle,.adv-export,.adv-print,.adv-chip,.adv-box,.adv-list,.adv-del,.ck-box,#ckBtn,#ckInput,.tbl-loading) { background: #20313e !important; color: #edf4f6 !important; border-color: #465863 !important; }
 [data-admin-theme=dark] .modern-admin #dashboard-tab .hero :is(h2,p),
 [data-admin-theme=dark] .modern-admin #dashContent .stat :is(.s-l,b) { color: #edf4f6 !important; }
+
+#adminLoginForm .camp-login-name { font-size: clamp(2rem, 6vw, 3.2rem); line-height: 1.35; margin: 0 0 .3em; text-align: center; }
+#historyResult td, #searchHistory td { white-space: normal; overflow-wrap: anywhere; }

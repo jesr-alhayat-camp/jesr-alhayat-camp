@@ -80,6 +80,7 @@
   font-size: 1rem;
   line-height: 1.7;
 }
+.access-card .access-brand h1.camp-login-name { font-size: clamp(2.1rem, 6vw, 3.6rem); line-height: 1.35; }
 .access-card .access-brand .access-kicker { color: #bcebd6; font-weight: 600; }
 .access-card .access-panel {
   min-width: 0;

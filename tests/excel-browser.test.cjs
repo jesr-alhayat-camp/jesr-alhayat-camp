@@ -7,7 +7,7 @@ const { promisify } = require("node:util");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-test("Excel buttons round-trip synthetic camp registers in Chrome", async () => {
+test("Admin Excel round-trips and family history search in Chrome", async () => {
   const root = path.resolve(__dirname, "../public");
   const page = fs.readdirSync(root).find((name) => name.startsWith("admin_"));
   const html = fs

@@ -19,15 +19,15 @@
     
     <link rel="stylesheet" href="/assets/admin-r3.css">
     <link rel="stylesheet" href="/assets/camp-admin-modern.css">
-    <link rel="stylesheet" href="/assets/admin-settings.css?v=20261127">
+    <link rel="stylesheet" href="/assets/admin-settings.css?v=history-1">
     <script defer src="/assets/admin-settings.js?v=20261127"></script>
 </head>
 <body class="modern-admin">
     <div id="syncLoader" aria-hidden="true" style="display:none"><i></i></div>
     <div id="loginOverlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999;">
         <form id="adminLoginForm">
-            <h2>⛺ دخول الإدارة</h2>
-            <p class="login-sub">نظام مخيم جسر الحياة الموحد</p>
+            <h1 class="camp-login-name">مخيم جسر الحياة</h1>
+            <p class="login-sub">دخول الإدارة</p>
             <div class="input-group"><label for="admEmail">البريد الإلكتروني</label><input type="email" id="admEmail" required autocomplete="username" style="direction:ltr"></div>
             <div class="input-group"><label for="admPass">كلمة المرور</label><div class="pw-wrap"><input type="password" id="admPass" required autocomplete="current-password"><button type="button" id="admPassToggle">إظهار</button></div></div>
             <div id="loginError" role="alert"></div>
@@ -57,6 +57,7 @@
                 <li id="nav-chronic" onclick="switchTab('chronic')">💊 الأمراض المزمنة</li>
                 <li id="nav-fund" onclick="switchTab('fund')">💰 صندوق المخيم</li>
                 <li id="nav-subscribers" onclick="switchTab('subscribers')" style="background-color: #059669; margin-top: 10px;">💸 دافعو الاشتراك</li>
+                <li id="nav-family-history" onclick="switchTab('family-history')">سجل الأسرة</li>
                 <li id="nav-audit" onclick="switchTab('audit')" style="background-color:#334155;margin-top:10px;">🕵️ سجل العمليات</li>
                 <li id="nav-settings" onclick="switchTab('settings')">⚙️ الإعدادات</li>
             </ul>
@@ -151,6 +152,9 @@
                     </form>
                 </div>
             </section>
+            <section id="family-history-tab" class="tab-content"><div class="header"><h1>سجل الأسرة</h1></div><div class="card">
+                    <form onsubmit="event.preventDefault();lookupFamilyHistory()"><label for="historyIdentity">رقم هوية ربّ الأسرة</label><div class="btnrow"><input id="historyIdentity" inputmode="numeric" required maxlength="9" dir="ltr" oninput="clearFamilyHistory()"><button class="btn btn-blue" type="submit">عرض السجل</button></div></form>
+                    <div id="historyResult" aria-live="polite"></div></div></section>
             <div id="audit-tab" class="tab-content">
                 <div class="header"><h1>🕵️ سجل العمليات</h1></div>
                 <div class="card">
@@ -178,6 +182,7 @@
                     <div class="card" style="border-top-color:#10b981;">
                         <h2 class="card-title" style="color:#10b981;">👤 بيانات وملخص الأسرة</h2>
                         <div id="srSummary" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:14px;"></div>
+                        <div id="searchHistory" aria-live="polite"></div>
                         <div id="srActions" class="btn-group-tools" style="margin-top:12px;"></div>
                     </div>
                     <div class="card" style="border-top-color:#3b82f6;">
@@ -587,6 +592,7 @@
 
     <script defer src="/assets/startup-r3.js"></script>
     <script defer src="/assets/camp-recovery-config.js?v=jesr-live-20261125"></script>
-    <script defer src="/assets/admin-r3.js?v=jesr-excel-20261127"></script>
+    <script defer src="/assets/admin-r3.js?v=jesr-history-20261127"></script>
+<script defer src="/assets/admin-family-history.js"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 const mockRecords = {};
+let pushSequence=0;
 const snap = (v) => ({ val: () => v ?? null, exists: () => v != null });
 const db = {
   ref(path) {
@@ -8,8 +9,15 @@ const db = {
       set: async (v) => {
         mockRecords[path] = v;
       },
-      push: async (v) => {
-        mockRecords[path] = v;
+      once: async () => {
+        const prefix=path+'/';
+        const children=Object.fromEntries(Object.entries(mockRecords).filter(([k])=>k.startsWith(prefix)).map(([k,v])=>[k.slice(prefix.length),v]));
+        return snap(mockRecords[path] ?? children);
+      },
+      push: (v) => {
+        const key='event'+(++pushSequence);
+        if (v!==undefined) mockRecords[path+'/'+key]=v;
+        return {key};
       },
       update: async (v) => Object.assign(mockRecords, v),
       transaction: async (cb) => {
@@ -58,6 +66,26 @@ async function verify() {
     41: "1",
     42: true,
   });
+  assert(el("family-history-tab"), "missing family history register");
+  const otherId='022222222';
+  localDB.db_families=[head];
+  localDB.db_reqlog={
+    old:{fid:head[2],ty:'db_edit_requests',st:'accepted',x:'طلب تجريبي',d:'2026-01-01',ud:'2026-01-02'},
+    other:{fid:otherId,ty:'db_edit_requests',st:'rejected',x:'أسرة مختلفة',d:'2026-01-04'}
+  };
+  const after=head.slice();after[26]='4';
+  await saveDB('db_families',[after],[head[2]],['تعديل الأسرة','',head[2],describeRecordChange('db_families',head,after)]);
+  await audit('معلومة منفصلة','لا تخص الأسرة الأولى',otherId);
+  el('historyIdentity').value='٠١١١١١١١١';
+  await lookupFamilyHistory();
+  const historyText=el('historyResult').textContent;
+  assert(historyText.includes('طلب تجريبي') && historyText.includes('تمت الموافقة') && historyText.includes('العدد الكلي للأفراد') && historyText.includes('بعد: 4'),'family timeline');
+  assert(!historyText.includes('أسرة مختلفة') && !historyText.includes('لا تخص الأسرة الأولى'),'cross-family timeline leak');
+  el('globalSearchInput').value=head[2];globalSearchAll();await Promise.resolve();
+  assert(el('searchHistory').textContent.includes('طلب تجريبي'),'global identity search');
+  el('historyIdentity').value='123';await lookupFamilyHistory();
+  assert(!el('historyResult').textContent.includes('طلب تجريبي'),'stale history');
+  localDB.db_reqlog={};
   const fixtures = {
     families: head,
     aids: ["أسرة اختبار", "011111111", "G", "طحين", "[2026-01-01] تجربة", "٢"],

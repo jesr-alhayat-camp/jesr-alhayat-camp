@@ -150,11 +150,24 @@
         function openModal(html){document.getElementById('modalBox').innerHTML=html;document.getElementById('modalBg').classList.add('show');}
         function closeModal(){document.getElementById('modalBg').classList.remove('show');}
         function downloadJSON(o,name){const b=new Blob([JSON.stringify(o,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
-        function audit(action,detail){try{rdb.ref('db_audit').push({t:Date.now(),u:(auth.currentUser&&auth.currentUser.email)||'',a:action,d:String(detail||'').slice(0,300)});}catch(e){}}
+        function auditUpdates(action,detail,identities=[],changes=''){
+            const event = {t:Date.now(),u:auth.currentUser?.email || '',a:action,d:String(detail || '').slice(0,300)};
+            const ids = [...new Set([].concat(identities).map(digitsOf).filter(id=>/^\d{9}$/.test(id)))];
+            const ref = rdb.ref('db_audit').push();
+            const updates = {['db_audit/'+ref.key]:event};
+            ids.forEach(id=>{updates['family_history/'+id+'/'+ref.key]={...event,d:changes || event.d};});
+            return updates;
+        }
+        function audit(...args){
+            return rdb.ref().update(auditUpdates(...args)).catch(error=>{
+                console.error('audit:',error);
+                toast('تعذّر حفظ سجل العملية.','err');
+            });
+        }
         function logReq(rid,fid,ty,status,reason,title){
             if(!rid) return;
             const cur=obj('db_reqlog')[rid]||{fid:safeKey(digitsOf(fid)),ty:ty,d:today(),x:String(title||'').slice(0,80)};
-            const e=Object.assign({},cur,{st:status,r:String(reason||'').slice(0,300),ud:today()});
+            const e=Object.assign({},cur,{st:status,r:String(reason||'').slice(0,300),ud:today(),decisionAt:Date.now(),decisionBy:auth.currentUser?.email || ''});
             localDB.db_reqlog[rid]=e; rdb.ref('db_reqlog/'+rid).set(e).then(() => schedulePublish([fid])).catch(err => console.error('db_reqlog:', err));
         }
         function diffFam(oldRow,newRow){
@@ -203,7 +216,7 @@
             const fam=famByKey(key); if(!fam){alert('❌ لم يتم العثور على الأسرة في القاعدة.');return;}
             const wa=waLink(fam[5],'السلام عليكم '+fam[1]+'، معك إدارة مخيم جسر الحياة بخصوص: ');
             openModal('<h3>👤 '+esc(fam[1])+' <small style="color:#64748b;">('+esc(fam[2])+' - '+esc(sectorName(fam[0]))+')</small></h3>'+familyHTML(fam)
-              +'<div class="btnrow">'+familyAidButton(key)+'<button class="btn btn-blue" onclick="printFamily(\''+esc(key)+'\')">🖨 طباعة البطاقة</button>'
+              +'<div class="btnrow">'+familyAidButton(key)+(ROLE==='super_admin'?'<button class="btn btn-blue" onclick="openHistoryFor(\''+digitsOf(key)+'\')">سجل الأسرة</button>':'')+'<button class="btn btn-blue" onclick="printFamily(\''+esc(key)+'\')">🖨 طباعة البطاقة</button>'
               +(wa?'<a class="btn btn-green" target="_blank" rel="noopener" href="'+esc(wa)+'">💬 واتساب</a>':'')
               +'<button class="btn btn-red" onclick="closeModal()">إغلاق</button></div>');
         }
@@ -212,7 +225,7 @@
             const w=window.open('','_blank'); if(!w){alert('اسمح بالنوافذ المنبثقة للطباعة.');return;}
             w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>بطاقة أسرة</title><style>body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#0f172a}h1{text-align:center;margin:0;font-size:22px}h2{text-align:center;margin:4px 0 16px;font-size:14px;color:#475569;font-weight:normal}h4{margin:14px 0 6px}table{width:100%;border-collapse:collapse;margin-bottom:8px}td,th{border:1px solid #94a3b8;padding:6px;font-size:12px;text-align:right}th{background:#e2e8f0}@media print{body{padding:0}}</style></head><body><h1>⛺ مخيم جسر الحياة</h1><h2>بطاقة بيانات أسرة · '+esc(new Date().toLocaleDateString('en-GB'))+'</h2>'+familyHTML(fam)+'</body></html>');
             w.document.close(); setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
-            audit('طباعة بطاقة أسرة',fam[1]);
+            audit('طباعة بطاقة أسرة',fam[1],fam[2]);
         }
         function renderSrActions(fam){
             const key=safeKey(digitsOf(fam[2])), wa=waLink(fam[5],'السلام عليكم '+fam[1]+'، معك إدارة مخيم جسر الحياة بخصوص: ');
@@ -428,7 +441,7 @@
             if(button) button.disabled=true;
             const row=[f[1],f[2],f[0],type,('['+date+'] '+note).trim(),qty,f[40] || ''];
             appendDBRecord('db_aids',row,safeKey(digitsOf(f[2]))).then(()=>{
-                audit('تسجيل استلام',f[1]+' | '+type+' | '+qty);
+                audit('تسجيل استلام',f[1]+' | '+type+' | '+qty,f[2]);
                 _lastQType=type; _qLog.unshift(new Date().toLocaleTimeString('en-GB')+' — '+f[1]+' — '+type+' ('+qty+')');
                 loadQuick(); document.getElementById('qResult').innerHTML='<p style="color:#047857;font-weight:bold;">✅ تم تسجيل الاستلام للأسرة: '+esc(f[1])+'</p>';
                 document.getElementById('qSearch').value=''; document.getElementById('qSearch').focus();
@@ -586,7 +599,7 @@
                     if (passNav) passNav.style.display = 'none';
                     if (fundNav) fundNav.style.display = 'none';
                     if (subNav) subNav.style.display = 'none';
-                    ['nav-audit','nav-ann','nav-stock','nav-vulnerable'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+                    ['nav-audit','nav-ann','nav-stock','nav-vulnerable','nav-family-history'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
                 }
 
                 const li = document.createElement('li');
@@ -862,9 +875,10 @@
                 return snapshot;
             });
         }
-        function saveDB(key, data, portalKeys) {
+        function saveDB(key, data, portalKeys, auditData) {
             localDB[key] = data;
-            return rdb.ref(key).set(data).then(() => {
+            const write = auditData ? rdb.ref().update({[key]:data,...auditUpdates(...auditData)}) : rdb.ref(key).set(data);
+            return write.then(() => {
                 if (['db_families','db_aids','db_children','db_injured','db_orphans','db_announcements','db_reqlog'].includes(key)) {
                     schedulePublish(portalKeys);
                 }
@@ -962,6 +976,7 @@
             if (!fam) { alert('❌ لم يتم العثور على أسرة بهذا الرقم أو الاسم في قاعدة الأسر.'); document.getElementById('globalSearchResult').classList.add('hidden'); return; }
             let famId = digitsOf(fam[2]);
             renderSrActions(fam);
+            loadFamilyHistory(famId,document.getElementById('searchHistory'));
 
             let sumBox = document.getElementById('srSummary');
             sumBox.innerHTML = `<p><strong>الاسم رباعي:</strong> ${esc(fam[1])}</p><p><strong>رقم الهوية:</strong> ${esc(fam[2])}</p><p><strong>تاريخ الميلاد:</strong> ${esc(formatDateValue(fam[4]))}</p><p><strong>القاطع:</strong> ${esc(fam[0])}</p><p><strong>رقم الجوال:</strong> ${esc(fam[5])}</p><p><strong>عدد الأفراد:</strong> ${esc(fam[26])}</p><p><strong>نوع المسكن:</strong> ${esc(fam[31])}</p><p><strong>الحالة:</strong> ${esc(fam[32])}</p><p><strong>المهنة:</strong> ${esc(fam[33])}</p>`;
@@ -1062,13 +1077,13 @@
                 const row = Array.from({length:9},(_,i)=>String(item.payload?.[i] ?? ''));
                 row[9] = String(item.id);
                 if (decision === 'accepted') update['db_orphans/request-' + rid] = row;
-                update['db_reqlog/'+rid] = {...(obj('db_reqlog')[rid] || {}),fid:String(item.id),ty:'db_orphans',x:row[0],st:decision,r:item.reason,d:localDateOf(item.date)||today(),ud:today()};
+                update['db_reqlog/'+rid] = {...(obj('db_reqlog')[rid] || {}),fid:String(item.id),ty:'db_orphans',x:row[0],st:decision,r:item.reason,d:localDateOf(item.date)||today(),ud:today(),decisionAt:Date.now(),decisionBy:auth.currentUser?.email || ''};
                 await rdb.ref().update(update);
                 schedulePublish([item.id]); audit(decision === 'accepted' ? 'قبول طلب يتيم' : 'رفض طلب يتيم',rid);
                 toast(decision === 'accepted' ? 'تم قبول الطلب وإضافة اليتيم.' : 'تم رفض الطلب.');
             } catch {toast('تعذّر حفظ القرار. أعد المحاولة بنفس القرار.','err');}
         }
-        function approveAddReq(dbKey, reqKey) {
+        async function approveAddReq(dbKey, reqKey) {
             if (dbKey === 'db_orphans') { decideOrphan(reqKey,'accepted',''); return; }
             const reqs = localDB[dbKey + '_reqs'] || {}, item = reqs[reqKey]; if (!item) return;
             const rawPayload = Array.from(item.payload || []), isEdit = isChildEdit(dbKey, rawPayload), editIdx = isEdit ? findChildIdx(rawPayload) : -1;
@@ -1079,9 +1094,16 @@
             if (pid && getDB(dbKey).some((r, i) => r && digitsOf(r[1]) === pid && i !== editIdx) && !confirm('⚠️ يوجد سجل بنفس رقم الهوية مسبقاً. هل تريد المتابعة رغم التكرار؟')) return;
             if (dbKey === 'db_injured') row[7] = item.id;
             if (dbKey === 'db_children' && fam) { if (!row[4]) row[4] = fam[1]; if (!row[5]) row[5] = fam[2]; if (!row[6]) row[6] = fam[5]; } // ربط بسجل رب الأسرة
-            const db = getDB(dbKey);
-            if (isEdit && editIdx >= 0) { const old = db[editIdx] || []; db[editIdx] = row.map((v, i) => (v === '' || v == null) && old[i] != null ? old[i] : v); } else db.push(row);
-            saveDB(dbKey, db);
+            const previous = getDB(dbKey), db = previous.slice();
+            let detail=String(row[0] || '');
+            if (isEdit && editIdx >= 0) {
+                const old = db[editIdx];
+                db[editIdx]=row.map((v,i)=>(v==='' || v==null) && old[i]!=null ? old[i] : v);
+                detail=describeRecordChange(dbKey,old,db[editIdx]);
+            } else db.push(row);
+            try {
+                await saveDB(dbKey,db,undefined,[isEdit?'تعديل طفل بطلب الأسرة':'إضافة سجل بطلب الأسرة',REQ_LABEL[dbKey],item.id,detail]);
+            } catch {localDB[dbKey]=previous;return;}
             delete reqs[reqKey]; rdb.ref(dbKey + '_reqs/' + reqKey).remove();
             const opLbl = isEdit ? 'تعديل بيانات طفل' : REQ_LABEL[dbKey];
             audit('قبول طلب ' + opLbl, (row[0] || '') + ' | أسرة ' + item.id);
@@ -1164,6 +1186,7 @@
                 if (await familyAccountAction(key, 'set-password', null, password)) {
                     form.reset();
                     dialog.close();
+                    audit('تعيين كلمة سر للأسرة','تم تحديث الحساب',key);
                     toast('تم تعيين كلمة السر. سلّمها للعائلة حتى تدخل وتغيّرها من صفحتها.');
                 } else {
                     message.textContent = 'تعذّر تأكيد الحفظ. راجع رسالة الخدمة.';
@@ -1203,6 +1226,7 @@
                     if (!document.getElementById('passwords-tab').classList.contains('active-tab')) return;
                     const target = button.isConnected ? button : document.getElementById('reveal-' + key);
                     if (target) {
+                        audit('إظهار كلمة سر للأسرة','عرض المدير كلمة السر',key);
                         target.textContent = result.password;
                         setTimeout(() => { target.textContent = 'إظهار'; }, 10000);
                     }
@@ -1274,7 +1298,7 @@
             if(!shown) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;">لا يوجد شكاوى جديدة.</td></tr>`;
         }
 
-        function approveRequest(index) {
+        async function approveRequest(index) {
             let reqs = getDB('db_edit_requests'), req = reqs[index], families = getDB('db_families'); if (!req) return;
             let fIndex = families.findIndex(f => f && safeKey(digitsOf(f[2])) === safeKey(digitsOf(req.id)));
             if (fIndex < 0) { toast('⚠️ لم يتم العثور على الأسرة في القاعدة، لا يمكن تطبيق الطلب.'); return; }
@@ -1282,10 +1306,12 @@
             const n = diffFam(old, nd).filter(d => !d.locked).length;
             if (!confirm('تطبيق ' + n + ' تعديل على بيانات أسرة: ' + old[1] + '؟')) return;
             LOCKED_IDX.forEach(i => { nd[i] = old[i] == null ? '' : old[i]; }); // القاطع والاسم والهوية والملاحظات الداخلية لا تتغير
-            nd[40] = old[40] || ''; nd[41] = req.newData?.[41] == null ? old[41] ?? '' : String(req.newData[41]); if (!/^\d{0,3}$/.test(nd[41])) { toast('عدد المصابين غير صالح.','err'); return; } if(old[42] === true) nd[42] = true; families[fIndex] = nd; saveDB('db_families', families);
-            audit('قبول طلب تعديل', old[1] + ' | ' + n + ' حقل');
+            nd[40] = old[40] || ''; nd[41] = req.newData?.[41] == null ? old[41] ?? '' : String(req.newData[41]); if (!/^\d{0,3}$/.test(nd[41])) { toast('عدد المصابين غير صالح.','err'); return; } if(old[42] === true) nd[42] = true; const changed=families.slice(); changed[fIndex]=nd;
+            try {
+                await saveDB('db_families',changed,[req.id],['تطبيق تعديل بطلب الأسرة',old[1],req.id,describeRecordChange('db_families',old,nd)]);
+            } catch { localDB.db_families=families; return; }
             logReq(req.rid, req.id, 'db_edit_requests', 'accepted', '', 'تعديل بيانات الأسرة');
-            reqs.splice(index, 1); saveDB('db_edit_requests', reqs); switchTab('requests');
+            saveDB('db_edit_requests', getDB('db_edit_requests').filter(item=>item!==req && (!req.rid || item?.rid!==req.rid))); switchTab('requests');
         }
         function rejectRequest(index) {
             const req = getDB('db_edit_requests')[index];
@@ -1312,7 +1338,7 @@
         }
         function deleteComplaint(index) {
             if (isLimited) { alert('⛔ ليست لديك صلاحية الحذف.'); return; }
-            if(confirm('حذف الشكوى؟')) { let comps = getDB('db_complaints'); const c = comps[index]; comps.splice(index, 1); saveDB('db_complaints', comps); audit('حذف شكوى', c && (c[1] + ' | ' + c[4])); switchTab('requests'); }
+            if(confirm('حذف الشكوى؟')) { let comps = getDB('db_complaints'); const c = comps[index]; comps.splice(index, 1); saveDB('db_complaints', comps,undefined,['حذف شكوى',c?.[4],c?.[2]]); switchTab('requests'); }
         }
 
         function addRecord(e, dbKey, inputPrefix, fieldCount) {
@@ -1331,7 +1357,7 @@
             if (dbKey === 'db_families' && db.some(f => f && digitsOf(f[2]) === digitsOf(row[2])) && !confirm('⚠️ توجد أسرة بنفس رقم الهوية مسبقاً. هل تريد الإضافة رغم التكرار؟')) return;
             const portalKey = (dbKey === 'db_families' ? safeKey(digitsOf(row[2])) : dbKey === 'db_aids' ? safeKey(digitsOf(row[1])) : dbKey === 'db_children' ? safeKey(digitsOf(row[5])) || safeKey(digitsOf(row[8])) : dbKey === 'db_injured' ? row[7] : dbKey === 'db_chronic' ? safeKey(digitsOf(row[1])) : dbKey === 'db_orphans' ? null : '');
             const done = dbKey === 'db_fund' ? saveDB(dbKey, getDB(dbKey).concat([row])) : appendDBRecord(dbKey, row, portalKey);
-            done.then(()=>{ audit('إضافة سجل', dbKey + ' | ' + (row[0] || row[1] || '')); if(dbKey !== 'db_fund') e.target.reset(); else { document.getElementById('fu_3').value=''; document.getElementById('fu_4').value=''; document.getElementById('fu_5').value=''; } refreshNow(); }).catch(err=>alert('❌ تعذر حفظ السجل: '+(err.message||err)));
+            done.then(()=>{ audit('إضافة سجل', (EDIT_TITLES[dbKey] || dbKey) + ' | ' + (row[1] || row[0] || ''),rowPortalKeys(dbKey,row)); if(dbKey !== 'db_fund') e.target.reset(); else { document.getElementById('fu_3').value=''; document.getElementById('fu_4').value=''; document.getElementById('fu_5').value=''; } refreshNow(); }).catch(err=>alert('❌ تعذر حفظ السجل: '+(err.message||err)));
         }
 
         function addFamily(e) { addRecord(e, 'db_families', 'f', 40); }
@@ -1402,6 +1428,7 @@
                 if (!result.committed || !result.snapshot.exists()) throw Error();
                 localDB.db_families = toRows(result.snapshot.val());
                 refreshNow();
+                audit(marked?'إضافة للأسر الهشّة':'إزالة علامة الهشاشة','',id);
                 toast(marked ? 'أُضيفت الأسرة لكشف الأسر الهشّة.' : 'أُزيلت العلامة عن الأسرة.');
             } catch { toast('تعذّر حفظ العلامة. تأكّد إنّ الهوية مسجّلة مرة واحدة.', 'err'); }
             finally { button.disabled = false; }
@@ -1438,7 +1465,7 @@
                 });
                 if (!result.committed || !result.snapshot.exists()) throw Error('تأكّد إنّ كل هوية موجودة مرة واحدة بكشف الأسر.');
                 localDB.db_families=toRows(result.snapshot.val());
-                refreshNow(); renderVulnerable(); audit('استيراد أسر هشّة',String(ids.size)); toast('تم تعليم الأسر.');
+                refreshNow(); renderVulnerable(); audit('استيراد أسر هشّة',String(ids.size),[...ids],'تعليم الأسرة كهشّة'); toast('تم تعليم الأسر.');
             } catch (error) { toast(error.message,'err'); } finally { input.value=''; }
         }
         function renderVulnerable() {
@@ -1673,11 +1700,11 @@
 
         /* ================= تعديل أي سجل من الإدارة (كل الكشوفات) ================= */
         const EDIT_TITLES = {db_families:'الأسرة', db_aids:'المساعدة', db_injured:'المصاب', db_orphans:'اليتيم', db_children:'الطفل', db_chronic:'المريض المزمن', db_fund:'القيد المالي', db_stock:'حركة المخزون'};
-        function rowPortalKeys(dbKey, row) {
+        function rowPortalKeys(dbKey, row, owners) {
             if (!row) return [];
             const k = v => safeKey(digitsOf(v));
             const ks = dbKey === 'db_families' ? [k(row[2])]
-                : dbKey === 'db_aids' ? [k(row[1])] : dbKey === 'db_injured' ? [injuryFamily(row,injuryOwners(getDB('db_families'),getDB('db_children')))]
+                : dbKey === 'db_aids' ? [k(row[1])] : dbKey === 'db_injured' ? [injuryFamily(row,owners || injuryOwners(getDB('db_families'),getDB('db_children')))]
                 : dbKey === 'db_children' ? [k(row[5]), k(row[8])]
                 : dbKey === 'db_orphans' ? orphanKeys(row)
                 : dbKey === 'db_chronic' ? [k(row[1])] : [];
@@ -1718,8 +1745,7 @@
             if (dbKey === 'db_children') { const w = linkChildRow(row); if (w && !confirm(w)) return; }
             db[index] = row;
             const keys = Array.from(new Set(rowPortalKeys(dbKey, old).concat(rowPortalKeys(dbKey, row))));
-            saveDB(dbKey, db, keys.length ? keys : undefined).then(() => {
-                audit('تعديل سجل', dbKey + ' | ' + (row[0] || row[1] || '') + ' | #' + (index + 1));
+            saveDB(dbKey, db, keys.length ? keys : undefined, ['تعديل سجل '+EDIT_TITLES[dbKey], 'سجل #'+(index+1), keys, describeRecordChange(dbKey,old,row)]).then(() => {
                 closeModal();
                 const act = document.querySelector('.tab-content.active-tab');
                 if (act) refreshNow();
@@ -1734,8 +1760,7 @@
             const label = String(r[1] || r[0] || '').trim();
             if (!confirm('هل أنت متأكد من حذف هذا السجل؟' + (label ? '\n\n' + label : '') + famDeleteNote(dbKey, r))) return;
             const db = cur.slice(); db.splice(index, 1);
-            saveDB(dbKey, db).then(() => {
-                audit('حذف سجل', dbKey + ' | ' + label);
+            saveDB(dbKey, db, undefined, ['حذف سجل', EDIT_TITLES[dbKey] + ' | ' + label,rowPortalKeys(dbKey,r)]).then(() => {
                 toast('تم حذف السجل');
                 refreshNow();
             }).catch(() => { localDB[dbKey] = cur; });
@@ -1907,7 +1932,8 @@
                         localDB[dbKey] = snapshot && typeof snapshot.val === 'function' ? toRows(snapshot.val()) : current.concat(imported);
                         if (['db_families','db_aids','db_children','db_injured','db_orphans'].includes(dbKey)) schedulePublish();
                         updateBadgeCount();
-                        audit('استيراد إكسل', dbKey + ' | ' + imported.length + ' سجل' + (skipped ? ' | تخطي مكرر ' + skipped : ''));
+                        const owners=dbKey==='db_injured'?injuryOwners(getDB('db_families'),getDB('db_children')):null;
+                        audit('استيراد إكسل', dbKey + ' | ' + imported.length + ' سجل' + (skipped ? ' | تخطي مكرر ' + skipped : ''),imported.flatMap(r=>rowPortalKeys(dbKey,r,owners)),EDIT_TITLES[dbKey]);
                         toast('✅ تم استيراد ' + imported.length + ' سجل بنجاح' + (skipped ? ' (تخطي ' + skipped + ' مكرر)' : ''));
                         refreshNow();
                         if (dbKey==='db_stock') loadStock();
@@ -2891,7 +2917,7 @@ function sendFamMsg() {
     const b = document.getElementById('mgSend'); b.classList.add('is-loading');
     rdb.ref('config/famMsgs/' + id).set(rec).then(() => {
         localDB.config = localDB.config || {}; (localDB.config.famMsgs = localDB.config.famMsgs || {})[id] = rec;
-        audit('إرسال رسالة لأسر', _mg.title + ' | ' + _mg.keys.length + ' أسرة'); schedulePublish(_mg.keys);
+        audit('إرسال رسالة لأسر', _mg.title + ' | ' + _mg.keys.length + ' أسرة',_mg.keys,_mg.title); schedulePublish(_mg.keys);
         closeModal(); toast('تم إرسال الرسالة إلى ' + _mg.keys.length + ' أسرة'); refreshNow();
     }).catch(e => { b.classList.remove('is-loading'); alert('❌ تعذر الإرسال: ' + (e && e.message ? e.message : e)); });
 }
@@ -3047,7 +3073,7 @@ async function chExecute() {
     const b = document.getElementById('chGo'); if (b) b.classList.add('is-loading');
     rdb.ref().update(up).then(() => {
         localDB.db_families = fams; localDB.db_aids = aids; localDB.db_children = kids; localDB.db_edit_requests = reqs;
-        audit('استبدال رب الأسرة بالزوجة', sel.length + ' أسرة | مساعدات منقولة: ' + sel.reduce((n, p) => n + p.aids.length, 0));
+        sel.forEach(p=>audit('استبدال رب الأسرة',p.oldId+' ← '+p.newId,[p.oldId,p.newId]));
         schedulePublish(); closeModal(); refreshNow();
         alert('✅ تم استبدال رب الأسرة في ' + sel.length + ' أسرة ونقل مساعداتها.\n\nتنبيه: حسابات البوابة القديمة (بهوية الزوج) أُلغيت. لتفعيل الحساب الجديد: بتقدر الأسرة تفعّل الحساب الجديد بهوية رب الأسرة الجديدة من بوابة العائلات.');
     }).catch(e => { if (b) b.classList.remove('is-loading'); alert('❌ لم يتم أي تغيير بسبب خطأ: ' + (e && e.message ? e.message : e)); });
@@ -3057,7 +3083,7 @@ async function chExecuteOrphans() {
     if (!confirm('نقل ' + sel.length + ' مساعدة إلى رب الأسرة الحالي؟')) return;
     if (!await backupAll()) return; const aids = cp(getDB('db_aids'));
     sel.forEach(r => { aids[r.ai][1] = r.to; aids[r.ai][0] = r.toName; });
-    rdb.ref().update({db_aids: aids}).then(() => { localDB.db_aids = aids; audit('نقل مساعدات منفصلة', sel.length + ' مساعدة'); schedulePublish(); closeModal(); refreshNow(); toast('تم نقل ' + sel.length + ' مساعدة'); })
+    rdb.ref().update({db_aids: aids}).then(() => { localDB.db_aids = aids; audit('نقل مساعدات منفصلة', sel.length + ' مساعدة',sel.map(r=>r.to),'نقل مساعدة لرب الأسرة الحالي'); schedulePublish(); closeModal(); refreshNow(); toast('تم نقل ' + sel.length + ' مساعدة'); })
         .catch(e => alert('❌ لم يتم أي تغيير: ' + (e && e.message ? e.message : e)));
 }
 /* زر داخل بطاقة الأسرة */
@@ -3657,7 +3683,7 @@ function baExecute() {
     const rows = sel.map(r => [r.f[1], r.f[2], r.f[0], type, stamp, qty, r.f[40] || '', batch]), b = document.getElementById('baGo'); b.classList.add('is-loading'); b.disabled = true;
     rdb.ref('db_aids').transaction(cur => { if (cur == null) return rows.slice(); const arr = (Array.isArray(cur) ? cur : Object.keys(cur).sort((x, y) => x - y).map(k => cur[k])).map(rowArr); return arr.concat(rows); }).then(res => {
         const v = res && res.snapshot && res.snapshot.val(); localDB.db_aids = v ? toRows(v) : getDB('db_aids').concat(rows);
-        audit('توزيع جماعي', type + ' × ' + qty + ' | ' + sel.length + ' أسرة | دفعة ' + batch); schedulePublish(sel.map(r => safeKey(digitsOf(r.f[2]))));
+        audit('توزيع جماعي', type + ' × ' + qty + ' | ' + sel.length + ' أسرة | دفعة ' + batch,sel.map(r=>r.f[2]),type+' × '+qty+' | '+date); schedulePublish(sel.map(r => safeKey(digitsOf(r.f[2]))));
         closeModal(); refreshNow(); toast('تم تسجيل «' + type + '» لـ ' + sel.length + ' أسرة', null, 5000);
     }).catch(e => { b.classList.remove('is-loading'); alert('❌ لم يتم التسجيل: ' + (e && e.message ? e.message : e)); baCount(); });
 }
@@ -3674,7 +3700,7 @@ function baUndo(id) {
     if (!confirm('التراجع عن دفعة «' + g.type + '» (' + g.n + ' أسرة)؟ سيتم حذف هذه السجلات من كشف الاستلام.')) return;
     const keys = getDB('db_aids').filter(a => Array.isArray(a) && a[7] === id).map(a => safeKey(digitsOf(a[1])));
     rdb.ref('db_aids').transaction(cur => { if (cur == null) return cur; return (Array.isArray(cur) ? cur : Object.keys(cur).sort((x, y) => x - y).map(k => cur[k])).map(rowArr).filter(r => !(Array.isArray(r) && r[7] === id)); }).then(res => {
-        const v = res && res.snapshot && res.snapshot.val(); localDB.db_aids = v ? toRows(v) : []; audit('تراجع عن توزيع جماعي', g.type + ' | ' + g.n + ' أسرة | ' + id); schedulePublish(keys); refreshNow(); baUndoRender(); toast('تم التراجع عن الدفعة (' + g.n + ' سجل)');
+        const v = res && res.snapshot && res.snapshot.val(); localDB.db_aids = v ? toRows(v) : []; audit('تراجع عن توزيع جماعي', g.type + ' | ' + g.n + ' أسرة | ' + id,keys); schedulePublish(keys); refreshNow(); baUndoRender(); toast('تم التراجع عن الدفعة (' + g.n + ' سجل)');
     }).catch(e => alert('❌ تعذر التراجع: ' + (e && e.message ? e.message : e)));
 }
 document.addEventListener('DOMContentLoaded', () => {
@@ -3788,7 +3814,7 @@ function openReqCheck() {
         el.innerHTML = '<table><thead><tr><th>القسم</th><th>في Firebase</th><th>ظاهر في الصفحة</th><th></th></tr></thead><tbody>' + cols.map(([k, l], i) => { const c = counts[i], s = shown(k); return '<tr><td>' + l + '</td><td>' + (c == null ? 'تعذر القراءة' : c) + '</td><td>' + s + '</td><td>' + (c == null ? '—' : c === s ? '✅' : '⚠️ يوجد فرق: أعد تحميل الصفحة') + '</td></tr>'; }).join('') + '</tbody></table>';
     });
 }
-function rcDel(fid, k) { if (!confirm('حذف هذا الطلب من صندوق الوارد نهائياً؟')) return; rdb.ref('inbox/' + fid + '/' + k).remove().then(() => { if (localDB.inbox && localDB.inbox[fid]) delete localDB.inbox[fid][k]; delete _inboxFail[fid + '/' + k]; audit('حذف طلب من الوارد', fid + '/' + k); openReqCheck(); rqAlert(); updateBadgeCount(); }).catch(e => alert('❌ ' + (e && e.message || e))); }
+function rcDel(fid, k) { if (!confirm('حذف هذا الطلب من صندوق الوارد نهائياً؟')) return; rdb.ref('inbox/' + fid + '/' + k).remove().then(() => { if (localDB.inbox && localDB.inbox[fid]) delete localDB.inbox[fid][k]; delete _inboxFail[fid + '/' + k]; audit('حذف طلب من الوارد', 'حذف من صندوق الوارد',fid); openReqCheck(); rqAlert(); updateBadgeCount(); }).catch(e => alert('❌ ' + (e && e.message || e))); }
 function rcResend(rid) { const e = obj('db_reqlog')[rid]; if (!e) return; logReq(rid, e.fid, e.ty, 'rejected', 'لم يصلنا نص طلبك بشكل كامل. الرجاء إعادة إرساله من جديد.', e.x); audit('طلب إعادة إرسال', rid); setTimeout(() => { openReqCheck(); rqAlert(); }, 300); }
 function rcResendAll() { const m = reqMissing(); if (!m.length || !confirm('إرسال طلب «إعادة الإرسال» إلى ' + m.length + ' أسرة؟')) return; m.forEach(x => logReq(x.rid, x.e.fid, x.e.ty, 'rejected', 'لم يصلنا نص طلبك بشكل كامل. الرجاء إعادة إرساله من جديد.', x.e.x)); audit('طلب إعادة إرسال جماعي', m.length + ' طلب'); toast('تم إشعار ' + m.length + ' أسرة بإعادة الإرسال'); setTimeout(() => { openReqCheck(); rqAlert(); }, 400); }
 
